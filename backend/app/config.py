@@ -12,7 +12,7 @@ else:
 
 
 class Settings(BaseSettings):
-    local_model_base_url: str = "http://192.168.0.120:8081/v1"
+    local_model_base_url: str = "http://192.168.0.125:8081/v1"
     local_model_name: str = "Qwen3.6-35B-A3B-UD-Q8_K_XL"
     local_model_max_tokens: int = 2048
     local_model_top_p: float = 0.9

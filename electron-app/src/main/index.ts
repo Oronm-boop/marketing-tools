@@ -4,10 +4,10 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { startBackend, stopBackend } from './backend'
 
-const PREFERRED_WINDOW_WIDTH = 2445
-const PREFERRED_WINDOW_HEIGHT = 1700
-const MIN_WINDOW_WIDTH = 1180
-const MIN_WINDOW_HEIGHT = 760
+const PREFERRED_WINDOW_WIDTH = 1280
+const PREFERRED_WINDOW_HEIGHT = 800
+const MIN_WINDOW_WIDTH = 1024
+const MIN_WINDOW_HEIGHT = 640
 
 function createWindow(): void {
   const { width, height } = getInitialWindowSize()

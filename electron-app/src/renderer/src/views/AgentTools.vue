@@ -165,6 +165,7 @@
                     <th>关键词</th>
                     <th>搜索量预估</th>
                     <th>难度</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -176,6 +177,17 @@
                         {{ item.difficulty }}
                       </span>
                     </td>
+                    <td>
+                      <button
+                        class="table-action"
+                        type="button"
+                        :disabled="copyLoading"
+                        @click="prepareCopyFromKeyword(item.keyword)"
+                      >
+                        <IconGlyph name="document" />
+                        <span>生成文案</span>
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -183,7 +195,7 @@
           </section>
         </section>
 
-        <section v-show="activeTool === 'copy'" class="tool-card" aria-labelledby="copy-tool-title">
+        <section v-show="activeTool === 'copy'" ref="copyToolRef" class="tool-card" aria-labelledby="copy-tool-title">
           <div class="card-header">
             <span class="card-icon">
               <IconGlyph name="document" />
@@ -198,6 +210,7 @@
             <label class="field">
               <span>关键词</span>
               <input
+                ref="copyKeywordInputRef"
                 v-model="copyForm.keyword"
                 :disabled="copyLoading"
                 type="text"
@@ -431,6 +444,8 @@ const sessions = ref<ChatSession[]>(loadSessions())
 const activeChatId = ref(ensureInitialSessionId(sessions.value))
 const seoResultRef = ref<HTMLElement | null>(null)
 const copyResultRef = ref<HTMLElement | null>(null)
+const copyToolRef = ref<HTMLElement | null>(null)
+const copyKeywordInputRef = ref<HTMLInputElement | null>(null)
 const sortedSessions = computed(() => [...sessions.value].sort((a, b) => b.updatedAt - a.updatedAt))
 const activeSession = computed(() => sessions.value.find((session) => session.id === activeChatId.value) ?? null)
 const activeConversationEntries = computed(() => {
@@ -528,6 +543,18 @@ const submitCopy = async () => {
       article_count: requestPayload.articleCount,
       platform_styles: requestPayload.platforms
     })
+    console.log('[LLM copywriting response]', response)
+    console.log(
+      '[LLM copywriting items]',
+      response.items.map((item, index) => ({
+        index: index + 1,
+        title: item.title,
+        platform: item.platform,
+        angle: item.angle,
+        content: item.content,
+        actual_keyword_count: item.actual_keyword_count
+      }))
+    )
     copyResults.value = response.items
     copyModel.value = response.model
     appendSessionEntry({
@@ -581,6 +608,21 @@ const difficultyClass = (difficulty: string) => {
   if (difficulty.includes('低')) return 'low'
   if (difficulty.includes('高')) return 'high'
   return 'medium'
+}
+
+const prepareCopyFromKeyword = async (keyword: string) => {
+  const selectedKeyword = keyword.trim()
+  if (!selectedKeyword || copyLoading.value) return
+
+  copyForm.keyword = selectedKeyword
+  copyError.value = ''
+  copyResults.value = []
+  copyModel.value = ''
+  activeTool.value = 'copy'
+
+  await nextTick()
+  copyToolRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  copyKeywordInputRef.value?.focus()
 }
 
 function createNewSession() {
@@ -1112,7 +1154,8 @@ onMounted(() => {
 
 .new-chat-button:active,
 .tool-tab:active,
-.primary-action:active {
+.primary-action:active,
+.table-action:active {
   transform: scale(0.98);
 }
 
@@ -1307,6 +1350,46 @@ onMounted(() => {
   transform: none;
 }
 
+.table-action {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #0755b4;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+  padding: 5px 10px;
+}
+
+.table-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.table-action:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #004395;
+}
+
+.table-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+  transform: none;
+}
+
 .form-error {
   margin: -4px 0 0;
   border: 1px solid #fecaca;
@@ -1331,6 +1414,7 @@ onMounted(() => {
   min-width: 0;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -1378,7 +1462,7 @@ onMounted(() => {
 
 .result-table {
   width: 100%;
-  min-width: 560px;
+  min-width: 680px;
   border-collapse: collapse;
   color: var(--text-soft);
   font-size: 14px;

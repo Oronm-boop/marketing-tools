@@ -51,7 +51,7 @@ D:\tool\backend\.env
 默认配置：
 
 ```text
-LOCAL_MODEL_BASE_URL=http://192.168.0.125:8081/v1
+LOCAL_MODEL_BASE_URL=http://192.168.0.124:8081/v1
 LOCAL_MODEL_NAME=Qwen3.6-35B-A3B-UD-Q8_K_XL
 LOCAL_MODEL_MAX_TOKENS=2048
 LOCAL_MODEL_TOP_P=0.9
@@ -61,7 +61,7 @@ REQUEST_TIMEOUT_SECONDS=300
 后端会调用本地 OpenAI-compatible Chat 接口：
 
 ```text
-POST http://192.168.0.125:8081/v1/chat/completions
+POST http://192.168.0.124:8081/v1/chat/completions
 ```
 
 请求体使用本地 chat-completions 格式：

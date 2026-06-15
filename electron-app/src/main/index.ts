@@ -9,8 +9,6 @@ const PREFERRED_WINDOW_WIDTH = 1280
 const PREFERRED_WINDOW_HEIGHT = 800
 const MIN_WINDOW_WIDTH = 1024
 const MIN_WINDOW_HEIGHT = 640
-const LICENSE_VALIDATION_IP = process.env['MDT_LICENSE_IP'] || '127.0.0.1'
-const LICENSE_VALIDATION_PORT = Number(process.env['MDT_LICENSE_PORT'] || 8088)
 
 function createWindow(): void {
   const { width, height } = getInitialWindowSize()
@@ -72,10 +70,12 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  const licenseResult = await verifyLicense(LICENSE_VALIDATION_IP, LICENSE_VALIDATION_PORT)
-  if (!licenseResult.valid) {
-    const logHint = licenseResult.logPath ? `\n\n日志位置：${licenseResult.logPath}` : ''
-    dialog.showErrorBox('License 验证失败', `${licenseResult.message}${logHint}`)
+  const licenseResult = await verifyLicense()
+  if (!licenseResult.ok) {
+    const reason = licenseResult.reason ?? '未知原因'
+    const logHint = licenseResult.logFile ? `\n\n日志位置：${licenseResult.logFile}` : ''
+    console.error(`[license] 授权校验失败: ${reason}`)
+    dialog.showErrorBox('License 验证失败', `未检测到有效授权，应用将退出。\n\n原因：${reason}${logHint}`)
     app.exit(1)
     return
   }

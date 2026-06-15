@@ -1,385 +1,406 @@
-import { execFile } from 'child_process'
-import { randomUUID } from 'crypto'
+import { spawn } from 'child_process'
 import { app } from 'electron'
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'fs'
-import { join, resolve } from 'path'
-import { promisify } from 'util'
-import { is } from '@electron-toolkit/utils'
+import { appendFileSync, existsSync, mkdirSync, statSync } from 'fs'
+import { delimiter, dirname, join, resolve } from 'path'
 
-const LICENSE_DLL_NAMES = ['LicenseValidator.dll', 'LicenseVallidator.dll']
-const LICENSE_CHECK_TIMEOUT_MS = 30_000
-const LICENSE_LOG_NAME = 'license.log'
-const MAX_LICENSE_LOG_BYTES = 2 * 1024 * 1024
+const DLL_NAMES = ['LicenseVallidator.dll', 'LicenseValidator.dll']
+const EXPORT_NAME = 'ParseAndVerifyLicense'
+const RESULT_PREFIX = '__LICENSE_RESULT__'
+const DEFAULT_LICENSE_IP = '127.0.0.1'
+const DEFAULT_LICENSE_PORT = 7681
+const DEFAULT_LICENSE_TIMEOUT_MS = 15_000
+const LICENSE_RUNTIME_SIDECAR_FILES = [
+  'libcrypto-3-x64.dll',
+  'libssl-3-x64.dll',
+  'uv.dll',
+  'websockets.dll',
+  'zlib1.dll'
+]
 
-const execFileAsync = promisify(execFile)
+export interface LicenseResult {
+  ok: boolean
+  reason?: string
+  logFile?: string
+}
 
-export type LicenseValidationResult =
-  | {
-      valid: true
-      logPath?: string
+const resolveLogFile = (): string | undefined => {
+  try {
+    const logDir = join(app.getPath('userData'), 'logs')
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true })
     }
-  | {
-      valid: false
-      message: string
-      logPath?: string
-    }
-
-export async function verifyLicense(ip: string, port: number): Promise<LicenseValidationResult> {
-  const logger = createLicenseLogger()
-  const validationId = randomUUID()
-  const startedAt = Date.now()
-
-  logger.info('License validation started', {
-    validationId,
-    platform: process.platform,
-    arch: process.arch,
-    isDev: is.dev,
-    ip,
-    port
-  })
-
-  if (process.platform !== 'win32') {
-    return failLicenseValidation(
-      logger,
-      validationId,
-      startedAt,
-      '当前 License 校验仅支持 Windows，无法加载 LicenseValidator.dll。',
-      { reason: 'unsupported_platform', platform: process.platform }
-    )
+    return join(logDir, 'license-check.log')
+  } catch {
+    return undefined
   }
+}
 
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    return failLicenseValidation(logger, validationId, startedAt, `License 验证端口无效：${port}。`, {
-      reason: 'invalid_port',
-      port
-    })
+const writeLog = (logFile: string | undefined, message: string): void => {
+  const line = `[${new Date().toISOString()}] ${message}`
+  console.log(`[license] ${message}`)
+
+  if (!logFile) {
+    return
   }
-
-  const licenseDir = getLicenseDir()
-  const dllPath = findLicenseDll(licenseDir)
-
-  logger.info('License DLL checked', {
-    validationId,
-    licenseDir,
-    configuredLicenseDir: process.env['MDT_LICENSE_DIR'] || null,
-    dllCandidates: LICENSE_DLL_NAMES.map((name) => getFileState(join(licenseDir, name))),
-    dllPath
-  })
-
-  if (!dllPath) {
-    return failLicenseValidation(
-      logger,
-      validationId,
-      startedAt,
-      `未找到 License 校验库：${LICENSE_DLL_NAMES.join(' 或 ')}`,
-      { reason: 'dll_missing', licenseDir }
-    )
-  }
-
-  const script = createLicenseCheckScript(licenseDir, dllPath, ip, port)
 
   try {
-    const { stdout, stderr } = await execFileAsync(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      {
-        encoding: 'utf8',
-        timeout: LICENSE_CHECK_TIMEOUT_MS,
-        windowsHide: true,
-        maxBuffer: 1024 * 1024
-      }
-    )
+    appendFileSync(logFile, `${line}\n`, 'utf-8')
+  } catch {
+    // License logging must never block validation.
+  }
+}
 
-    logger.info('License validator completed', {
-      validationId,
-      elapsedMs: Date.now() - startedAt,
-      stdout: toText(stdout),
-      stderr: toText(stderr)
-    })
+const normalizePath = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim()
+  return trimmed ? resolve(trimmed) : undefined
+}
 
-    if (getOutputLines(stdout).includes('VALID')) {
-      return {
-        valid: true,
-        ...(logger.path ? { logPath: logger.path } : {})
-      }
+const joinDllCandidates = (dirs: Array<string | undefined>): string[] =>
+  dirs
+    .filter((dir): dir is string => Boolean(dir))
+    .flatMap((dir) => DLL_NAMES.map((name) => join(dir, name)))
+
+const getDllCandidates = (): string[] => {
+  const customDllPath =
+    normalizePath(process.env.LICENSE_DLL_PATH) || normalizePath(process.env.MDT_LICENSE_DLL_PATH)
+  const customDllDir =
+    normalizePath(process.env.LICENSE_DLL_DIR) || normalizePath(process.env.MDT_LICENSE_DIR)
+  const appPath = app.getAppPath()
+
+  return [
+    customDllPath,
+    ...joinDllCandidates([
+      customDllDir,
+      join(process.resourcesPath, 'license'),
+      join(process.resourcesPath, 'License'),
+      join(process.resourcesPath, 'app.asar.unpacked', 'license'),
+      join(process.resourcesPath, 'app.asar.unpacked', 'License'),
+      join(appPath, 'license'),
+      join(appPath, 'License'),
+      join(process.cwd(), 'license'),
+      join(process.cwd(), 'License'),
+      join(appPath, '..', 'license'),
+      join(appPath, '..', 'License'),
+      join(appPath, '..', '..', 'license'),
+      join(appPath, '..', '..', 'License'),
+      join(__dirname, '..', '..', '..', 'license'),
+      join(__dirname, '..', '..', '..', 'License')
+    ])
+  ].filter((candidate): candidate is string => Boolean(candidate))
+}
+
+const resolveDllPath = (logFile: string | undefined): string | null => {
+  const seen = new Set<string>()
+
+  for (const candidate of getDllCandidates()) {
+    const dllPath = resolve(candidate)
+    const key = dllPath.toLowerCase()
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+
+    const exists = existsSync(dllPath)
+    writeLog(logFile, `probe dll path="${dllPath}" exists=${exists}`)
+
+    if (!exists) {
+      continue
     }
 
-    return failLicenseValidation(
-      logger,
-      validationId,
-      startedAt,
-      'License 验证未通过，软件即将退出。',
-      { reason: 'unexpected_output', stdout: toText(stdout), stderr: toText(stderr) }
-    )
-  } catch (error) {
-    const execError = error as ExecFailure
-    const stdout = toText(execError.stdout)
-    const stderr = toText(execError.stderr)
-
-    logger.error('License validator failed', {
-      validationId,
-      elapsedMs: Date.now() - startedAt,
-      exitCode: execError.code ?? null,
-      signal: execError.signal ?? null,
-      killed: Boolean(execError.killed),
-      message: execError.message,
-      stdout,
-      stderr
-    })
-
-    if (execError.code === 2 || getOutputLines(stdout).includes('INVALID')) {
-      return failLicenseValidation(
-        logger,
-        validationId,
-        startedAt,
-        'License 验证未通过，软件即将退出。',
-        { reason: 'dll_returned_invalid', exitCode: execError.code ?? null, stdout, stderr }
+    try {
+      const stats = statSync(dllPath)
+      writeLog(
+        logFile,
+        `selected dll path="${dllPath}" size=${stats.size} modified=${stats.mtime.toISOString()}`
       )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      writeLog(logFile, `selected dll path="${dllPath}" stat failed: ${message}`)
     }
 
-    if (execError.killed) {
-      return failLicenseValidation(logger, validationId, startedAt, 'License 验证超时，软件即将退出。', {
-        reason: 'timeout',
-        timeoutMs: LICENSE_CHECK_TIMEOUT_MS,
-        stdout,
-        stderr
-      })
-    }
-
-    const detail = [stderr, stdout].filter(Boolean).join('\n')
-    return failLicenseValidation(
-      logger,
-      validationId,
-      startedAt,
-      detail
-        ? `License 验证调用失败，软件即将退出。\n${detail}`
-        : 'License 验证调用失败，软件即将退出。',
-      {
-        reason: 'validator_process_error',
-        exitCode: execError.code ?? null,
-        signal: execError.signal ?? null,
-        stdout,
-        stderr
-      }
-    )
-  }
-}
-
-function getLicenseDir(): string {
-  const configuredLicenseDir = process.env['MDT_LICENSE_DIR']
-
-  if (configuredLicenseDir) {
-    return resolve(configuredLicenseDir)
-  }
-
-  if (is.dev) {
-    return resolve(process.cwd(), 'License')
-  }
-
-  return join(process.resourcesPath, 'License')
-}
-
-function findLicenseDll(licenseDir: string): string | null {
-  for (const name of LICENSE_DLL_NAMES) {
-    const dllPath = join(licenseDir, name)
-    if (existsSync(dllPath)) {
-      return dllPath
-    }
+    logRuntimeSidecarFiles(dllPath, logFile)
+    return dllPath
   }
 
   return null
 }
 
-function createLicenseCheckScript(
-  licenseDir: string,
+const logRuntimeSidecarFiles = (dllPath: string, logFile: string | undefined): void => {
+  const dllDir = dirname(dllPath)
+
+  for (const fileName of LICENSE_RUNTIME_SIDECAR_FILES) {
+    const sidecarPath = join(dllDir, fileName)
+    const exists = existsSync(sidecarPath)
+
+    if (!exists) {
+      writeLog(logFile, `runtime sidecar path="${sidecarPath}" exists=false`)
+      continue
+    }
+
+    try {
+      const stats = statSync(sidecarPath)
+      writeLog(
+        logFile,
+        `runtime sidecar path="${sidecarPath}" exists=true size=${stats.size} modified=${stats.mtime.toISOString()}`
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      writeLog(logFile, `runtime sidecar path="${sidecarPath}" stat failed: ${message}`)
+    }
+  }
+}
+
+const prependDllDirToPath = (dllPath: string, logFile: string | undefined): void => {
+  const dllDir = dirname(dllPath)
+  const currentPath = process.env.PATH ?? ''
+  const pathEntries = currentPath.split(delimiter)
+  const alreadyPresent = pathEntries.some((entry) => entry.toLowerCase() === dllDir.toLowerCase())
+
+  if (alreadyPresent) {
+    writeLog(logFile, `dll directory already in PATH: ${dllDir}`)
+    return
+  }
+
+  process.env.PATH = `${dllDir}${delimiter}${currentPath}`
+  writeLog(logFile, `prepended dll directory to PATH: ${dllDir}`)
+}
+
+const parsePort = (value: string | undefined): number => {
+  const port = Number(value)
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : DEFAULT_LICENSE_PORT
+}
+
+const parseTimeout = (value: string | undefined): number => {
+  const timeoutMs = Number(value)
+  return Number.isInteger(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_LICENSE_TIMEOUT_MS
+}
+
+const getLicenseEndpoint = (): { ip: string; port: number } => ({
+  ip:
+    process.env.LICENSE_SERVER_IP?.trim() ||
+    process.env.LICENSE_IP?.trim() ||
+    process.env.MDT_LICENSE_IP?.trim() ||
+    DEFAULT_LICENSE_IP,
+  port: parsePort(
+    process.env.LICENSE_SERVER_PORT || process.env.LICENSE_PORT || process.env.MDT_LICENSE_PORT
+  )
+})
+
+const getWorkerScript = (): string => `
+const RESULT_PREFIX = ${JSON.stringify(RESULT_PREFIX)};
+const EXPORT_NAME = ${JSON.stringify(EXPORT_NAME)};
+
+const writeResult = (payload) => {
+  process.stdout.write(RESULT_PREFIX + JSON.stringify(payload) + '\\n');
+};
+
+try {
+  const [dllPath, ip, portText] = process.argv.slice(1);
+  const koffi = require('koffi');
+  const lib = koffi.load(dllPath);
+  const parseAndVerifyLicense = lib.func(
+    'bool __stdcall ' + EXPORT_NAME + '(const char *ip, int port)'
+  );
+  const startedAt = Date.now();
+  const ok = Boolean(parseAndVerifyLicense(ip, Number(portText)));
+  writeResult({ ok, durationMs: Date.now() - startedAt });
+  process.exit(ok ? 0 : 2);
+} catch (error) {
+  writeResult({
+    ok: false,
+    error: error && (error.stack || error.message) ? error.stack || error.message : String(error)
+  });
+  process.exit(1);
+}
+`
+
+const getChildNodePath = (): string => {
+  const nodePaths = [
+    join(app.getAppPath(), 'node_modules'),
+    join(process.resourcesPath, 'app.asar.unpacked', 'node_modules'),
+    join(process.cwd(), 'node_modules'),
+    process.env.NODE_PATH
+  ].filter((value): value is string => Boolean(value))
+
+  return nodePaths.join(delimiter)
+}
+
+const parseWorkerResult = (
+  stdout: string
+): { ok?: boolean; error?: string; durationMs?: number } | null => {
+  const line = stdout
+    .split(/\r?\n/)
+    .reverse()
+    .find((entry) => entry.startsWith(RESULT_PREFIX))
+
+  if (!line) {
+    return null
+  }
+
+  return JSON.parse(line.slice(RESULT_PREFIX.length)) as {
+    ok?: boolean
+    error?: string
+    durationMs?: number
+  }
+}
+
+const runLicenseWorker = (
   dllPath: string,
   ip: string,
-  port: number
-): string {
-  return `
-$ErrorActionPreference = 'Stop'
-$licenseDir = ${toPowerShellString(licenseDir)}
-$dllPath = ${toPowerShellString(dllPath)}
-$env:PATH = $licenseDir + ';' + $env:PATH
+  port: number,
+  timeoutMs: number,
+  logFile: string | undefined
+): Promise<boolean> =>
+  new Promise((resolveResult, rejectResult) => {
+    let settled = false
+    let stdout = ''
+    let stderr = ''
+    const childNodePath = getChildNodePath()
+    const workerCwd = dirname(dllPath)
+    const startedAt = Date.now()
 
-if (!(Test-Path -LiteralPath $dllPath)) {
-  Write-Error "License DLL not found: $dllPath"
-  exit 10
-}
+    writeLog(
+      logFile,
+      `spawning license worker execPath="${process.execPath}" cwd="${workerCwd}" timeoutMs=${timeoutMs}`
+    )
+    writeLog(logFile, `worker NODE_PATH="${childNodePath}"`)
 
-$source = @'
-using System;
-using System.Runtime.InteropServices;
+    const child = spawn(process.execPath, ['-e', getWorkerScript(), dllPath, ip, String(port)], {
+      cwd: workerCwd,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        NODE_PATH: childNodePath
+      }
+    })
 
-public static class NativeLicenseValidator
-{
-  [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
-  public static extern bool SetDllDirectory(string lpPathName);
+    writeLog(logFile, `license worker pid=${child.pid ?? 'unknown'}`)
 
-  [DllImport(@"${toCSharpVerbatimString(dllPath)}", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi, EntryPoint = "ParseAndVerifyLicense")]
-  [return: MarshalAs(UnmanagedType.I1)]
-  public static extern bool ParseAndVerifyLicense(string ip, int port);
-}
-'@
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      child.kill()
+      rejectResult(new Error(`License validation timed out after ${timeoutMs}ms.`))
+    }, timeoutMs)
 
-Add-Type -TypeDefinition $source
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf-8')
+    })
 
-if (-not [NativeLicenseValidator]::SetDllDirectory($licenseDir)) {
-  $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-  Write-Error "SetDllDirectory failed: $errorCode"
-  exit 11
-}
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf-8')
+    })
 
-$valid = [NativeLicenseValidator]::ParseAndVerifyLicense(${toPowerShellString(ip)}, ${port})
-Write-Output "DLL_RETURN=$valid"
+    child.on('error', (error) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      writeLog(logFile, `license worker spawn error: ${error.message}`)
+      rejectResult(error)
+    })
 
-if ($valid) {
-  Write-Output 'VALID'
-  exit 0
-}
+    child.on('exit', (code, signal) => {
+      if (settled) {
+        return
+      }
 
-Write-Output 'INVALID'
-exit 2
-`.trim()
-}
+      settled = true
+      clearTimeout(timer)
 
-function toPowerShellString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
-}
+      const elapsedMs = Date.now() - startedAt
+      writeLog(
+        logFile,
+        `license worker exited code=${code ?? 'null'} signal=${signal ?? 'null'} elapsedMs=${elapsedMs}`
+      )
 
-function toCSharpVerbatimString(value: string): string {
-  return value.replace(/"/g, '""')
-}
+      if (stderr.trim()) {
+        writeLog(logFile, `license worker stderr: ${stderr.trim()}`)
+      }
 
-function toText(value: unknown): string {
-  return value ? String(value).trim() : ''
-}
+      try {
+        const result = parseWorkerResult(stdout)
+        if (!result) {
+          const trimmedStdout = stdout.trim()
+          if (trimmedStdout) {
+            writeLog(logFile, `license worker stdout without marker: ${trimmedStdout}`)
+          }
+          rejectResult(new Error(`License worker exited without a result. code=${code ?? 'null'}`))
+          return
+        }
 
-function getOutputLines(value: unknown): string[] {
-  return toText(value)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-}
+        writeLog(
+          logFile,
+          `license worker result ok=${Boolean(result.ok)} durationMs=${result.durationMs ?? 'unknown'}`
+        )
 
-function failLicenseValidation(
-  logger: LicenseLogger,
-  validationId: string,
-  startedAt: number,
-  message: string,
-  details: Record<string, unknown>
-): LicenseValidationResult {
-  logger.error('License validation failed', {
-    validationId,
-    elapsedMs: Date.now() - startedAt,
-    ...details
+        if (result.error) {
+          rejectResult(new Error(result.error))
+          return
+        }
+
+        resolveResult(Boolean(result.ok))
+      } catch (error) {
+        rejectResult(error)
+      }
+    })
   })
 
-  return {
-    valid: false,
-    message,
-    ...(logger.path ? { logPath: logger.path } : {})
+export const verifyLicense = async (): Promise<LicenseResult> => {
+  const logFile = resolveLogFile()
+  writeLog(logFile, 'starting license validation')
+  writeLog(
+    logFile,
+    `runtime platform=${process.platform} arch=${process.arch} electron=${process.versions.electron ?? 'unknown'} node=${process.versions.node}`
+  )
+  writeLog(
+    logFile,
+    `paths appPath="${app.getAppPath()}" resourcesPath="${process.resourcesPath}" cwd="${process.cwd()}"`
+  )
+
+  if (process.platform !== 'win32') {
+    const reason = 'License validator DLL is only supported on Windows.'
+    writeLog(logFile, reason)
+    return { ok: false, reason, logFile }
   }
-}
 
-function getFileState(filePath: string): LicenseFileState {
-  try {
-    const stat = statSync(filePath)
-    return {
-      path: filePath,
-      exists: true,
-      sizeBytes: stat.size,
-      modifiedAt: stat.mtime.toISOString()
-    }
-  } catch (error) {
-    return {
-      path: filePath,
-      exists: false,
-      error: error instanceof Error ? error.message : String(error)
-    }
+  const dllPath = resolveDllPath(logFile)
+  if (!dllPath) {
+    const reason = `Cannot find ${DLL_NAMES.join(' or ')}.`
+    writeLog(logFile, reason)
+    return { ok: false, reason, logFile }
   }
-}
 
-function createLicenseLogger(): LicenseLogger {
   try {
-    const logDir = join(app.getPath('userData'), 'logs')
-    mkdirSync(logDir, { recursive: true })
+    prependDllDirToPath(dllPath, logFile)
 
-    const logPath = join(logDir, LICENSE_LOG_NAME)
-    rotateLicenseLog(logPath)
+    const { ip, port } = getLicenseEndpoint()
+    const timeoutMs = parseTimeout(process.env.LICENSE_CHECK_TIMEOUT_MS)
+    writeLog(logFile, `calling ${EXPORT_NAME}("${ip}", ${port}) from "${dllPath}"`)
 
-    return {
-      path: logPath,
-      info: (message, details) => writeLicenseLog(logPath, 'INFO', message, details),
-      error: (message, details) => writeLicenseLog(logPath, 'ERROR', message, details)
+    const ok = await runLicenseWorker(dllPath, ip, port, timeoutMs, logFile)
+    writeLog(logFile, `${EXPORT_NAME} returned ${ok}`)
+
+    if (!ok) {
+      return {
+        ok: false,
+        reason: 'License validation failed.',
+        logFile
+      }
     }
+
+    writeLog(logFile, 'license validation passed')
+    return { ok: true, logFile }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[license] Failed to initialize license log: ${message}`)
-
-    return {
-      info: (logMessage, details) => console.info(`[license] ${logMessage}`, details ?? ''),
-      error: (logMessage, details) => console.error(`[license] ${logMessage}`, details ?? '')
-    }
+    const reason = `License validation error: ${message}`
+    writeLog(logFile, reason)
+    return { ok: false, reason, logFile }
   }
 }
-
-function rotateLicenseLog(logPath: string): void {
-  if (!existsSync(logPath)) {
-    return
-  }
-
-  const stat = statSync(logPath)
-  if (stat.size <= MAX_LICENSE_LOG_BYTES) {
-    return
-  }
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  renameSync(logPath, `${logPath}.${timestamp}.bak`)
-}
-
-function writeLicenseLog(
-  logPath: string,
-  level: LicenseLogLevel,
-  message: string,
-  details?: Record<string, unknown>
-): void {
-  const detailText = details ? ` ${JSON.stringify(details)}` : ''
-  const line = `${new Date().toISOString()} [${level}] ${message}${detailText}\n`
-
-  try {
-    appendFileSync(logPath, line, { encoding: 'utf8' })
-  } catch (error) {
-    const logError = error instanceof Error ? error.message : String(error)
-    console.error(`[license] Failed to write license log: ${logError}`)
-  }
-}
-
-type ExecFailure = Error & {
-  code?: number | string
-  killed?: boolean
-  signal?: string
-  stdout?: unknown
-  stderr?: unknown
-}
-
-type LicenseLogLevel = 'INFO' | 'ERROR'
-
-type LicenseLogger = {
-  path?: string
-  info: (message: string, details?: Record<string, unknown>) => void
-  error: (message: string, details?: Record<string, unknown>) => void
-}
-
-type LicenseFileState =
-  | {
-      path: string
-      exists: true
-      sizeBytes: number
-      modifiedAt: string
-    }
-  | {
-      path: string
-      exists: false
-      error: string
-    }

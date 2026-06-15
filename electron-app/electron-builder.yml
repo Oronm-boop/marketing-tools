@@ -17,7 +17,7 @@ extraResources:
   - from: ../backend/.env.example
     to: backend/.env
   - from: License
-    to: License
+    to: license
     filter:
       - '*.dll'
 win:

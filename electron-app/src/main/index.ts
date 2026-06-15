@@ -1,8 +1,9 @@
-import { app, shell, BrowserWindow, screen } from 'electron'
+import { app, dialog, shell, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { startBackend, stopBackend } from './backend'
+import { BACKEND_HOST, BACKEND_PORT, startBackend, stopBackend } from './backend'
+import { verifyLicense } from './license'
 
 const PREFERRED_WINDOW_WIDTH = 1280
 const PREFERRED_WINDOW_HEIGHT = 800
@@ -70,6 +71,15 @@ app.whenReady().then(async () => {
   })
 
   await startBackend()
+
+  const licenseValidation = await verifyLicense(BACKEND_HOST, BACKEND_PORT)
+  if (!licenseValidation.valid) {
+    dialog.showErrorBox('License 验证失败', licenseValidation.message)
+    stopBackend()
+    app.quit()
+    return
+  }
+
   createWindow()
 
   app.on('activate', function () {

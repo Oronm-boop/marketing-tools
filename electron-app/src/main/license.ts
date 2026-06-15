@@ -1,52 +1,108 @@
 import { execFile } from 'child_process'
-import { existsSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { app } from 'electron'
+import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { promisify } from 'util'
 import { is } from '@electron-toolkit/utils'
 
 const LICENSE_DLL_NAME = 'LicenseVallidator.dll'
 const LICENSE_CHECK_TIMEOUT_MS = 30_000
+const LICENSE_LOG_NAME = 'license.log'
+const MAX_LICENSE_LOG_BYTES = 2 * 1024 * 1024
+const LICENSE_RUNTIME_FILES = [
+  LICENSE_DLL_NAME,
+  'libcrypto-3-x64.dll',
+  'libssl-3-x64.dll',
+  'uv.dll',
+  'websockets.dll',
+  'zlib1.dll'
+]
 
 const execFileAsync = promisify(execFile)
 
 export type LicenseValidationResult =
   | {
       valid: true
+      logPath?: string
     }
   | {
       valid: false
       message: string
+      logPath?: string
     }
 
 export async function verifyLicense(ip: string, port: number): Promise<LicenseValidationResult> {
+  const logger = createLicenseLogger()
+  const validationId = randomUUID()
+  const startedAt = Date.now()
+
+  logger.info('License validation started', {
+    validationId,
+    platform: process.platform,
+    arch: process.arch,
+    isDev: is.dev,
+    pid: process.pid,
+    ip,
+    port,
+    timeoutMs: LICENSE_CHECK_TIMEOUT_MS
+  })
+
   if (process.platform !== 'win32') {
-    return {
-      valid: false,
-      message: '当前 License 校验仅支持 Windows，无法加载 LicenseVallidator.dll。'
-    }
+    return failLicenseValidation(
+      logger,
+      validationId,
+      startedAt,
+      '当前 License 校验仅支持 Windows，无法加载 LicenseVallidator.dll。',
+      { reason: 'unsupported_platform', platform: process.platform }
+    )
   }
 
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    return {
-      valid: false,
-      message: `License 验证端口无效：${port}。`
-    }
+    return failLicenseValidation(
+      logger,
+      validationId,
+      startedAt,
+      `License 验证端口无效：${port}。`,
+      { reason: 'invalid_port', port }
+    )
   }
 
   const licenseDir = getLicenseDir()
   const dllPath = join(licenseDir, LICENSE_DLL_NAME)
+  const runtimeFiles = getLicenseRuntimeFileStates(licenseDir)
+
+  logger.info('License runtime files checked', {
+    validationId,
+    licenseDir,
+    dllPath,
+    configuredLicenseDir: process.env['MDT_LICENSE_DIR'] || null,
+    runtimeFiles
+  })
 
   if (!existsSync(dllPath)) {
-    return {
-      valid: false,
-      message: `未找到 License 校验库：${dllPath}`
-    }
+    return failLicenseValidation(
+      logger,
+      validationId,
+      startedAt,
+      `未找到 License 校验库：${dllPath}`,
+      { reason: 'dll_missing', dllPath }
+    )
   }
 
   const script = createLicenseCheckScript(licenseDir, dllPath, ip, port)
 
   try {
-    const { stdout } = await execFileAsync('powershell.exe', [
+    logger.info('Invoking license validator DLL', {
+      validationId,
+      executable: 'powershell.exe',
+      dllPath,
+      licenseDir,
+      ip,
+      port
+    })
+
+    const { stdout, stderr } = await execFileAsync('powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
       '-ExecutionPolicy',
@@ -60,40 +116,84 @@ export async function verifyLicense(ip: string, port: number): Promise<LicenseVa
       maxBuffer: 1024 * 1024
     })
 
+    logger.info('License validator process completed', {
+      validationId,
+      exitCode: 0,
+      elapsedMs: Date.now() - startedAt,
+      stdout: toText(stdout),
+      stderr: toText(stderr)
+    })
+
     if (getOutputLines(stdout).includes('VALID')) {
-      return { valid: true }
+      logger.info('License validation succeeded', {
+        validationId,
+        elapsedMs: Date.now() - startedAt
+      })
+      return {
+        valid: true,
+        ...(logger.path ? { logPath: logger.path } : {})
+      }
     }
 
-    return {
-      valid: false,
-      message: 'License 验证未通过，软件即将退出。'
-    }
+    return failLicenseValidation(
+      logger,
+      validationId,
+      startedAt,
+      'License 验证未通过，软件即将退出。',
+      { reason: 'unexpected_success_output', stdout: toText(stdout), stderr: toText(stderr) }
+    )
   } catch (error) {
     const execError = error as ExecFailure
     const stdout = toText(execError.stdout)
     const stderr = toText(execError.stderr)
 
+    logger.error('License validator process failed', {
+      validationId,
+      elapsedMs: Date.now() - startedAt,
+      exitCode: execError.code ?? null,
+      signal: execError.signal ?? null,
+      killed: Boolean(execError.killed),
+      message: execError.message,
+      stdout,
+      stderr
+    })
+
     if (execError.code === 2 || getOutputLines(stdout).includes('INVALID')) {
-      return {
-        valid: false,
-        message: 'License 验证未通过，软件即将退出。'
-      }
+      return failLicenseValidation(
+        logger,
+        validationId,
+        startedAt,
+        'License 验证未通过，软件即将退出。',
+        { reason: 'dll_returned_invalid', exitCode: execError.code ?? null, stdout, stderr }
+      )
     }
 
     if (execError.killed) {
-      return {
-        valid: false,
-        message: 'License 验证超时，软件即将退出。'
-      }
+      return failLicenseValidation(
+        logger,
+        validationId,
+        startedAt,
+        'License 验证超时，软件即将退出。',
+        { reason: 'timeout', timeoutMs: LICENSE_CHECK_TIMEOUT_MS, stdout, stderr }
+      )
     }
 
     const detail = [stderr, stdout].filter(Boolean).join('\n')
-    return {
-      valid: false,
-      message: detail
+    return failLicenseValidation(
+      logger,
+      validationId,
+      startedAt,
+      detail
         ? `License 验证调用失败，软件即将退出。\n${detail}`
-        : 'License 验证调用失败，软件即将退出。'
-    }
+        : 'License 验证调用失败，软件即将退出。',
+      {
+        reason: 'validator_process_error',
+        exitCode: execError.code ?? null,
+        signal: execError.signal ?? null,
+        stdout,
+        stderr
+      }
+    )
   }
 }
 
@@ -122,11 +222,13 @@ $ErrorActionPreference = 'Stop'
 $licenseDir = ${toPowerShellString(licenseDir)}
 $dllPath = ${toPowerShellString(dllPath)}
 $env:PATH = $licenseDir + ';' + $env:PATH
+Write-Output 'STEP:PATH_UPDATED'
 
 if (!(Test-Path -LiteralPath $dllPath)) {
   Write-Error "License DLL not found: $dllPath"
   exit 10
 }
+Write-Output 'STEP:DLL_FOUND'
 
 $source = @'
 using System;
@@ -144,14 +246,17 @@ public static class NativeLicenseValidator
 '@
 
 Add-Type -TypeDefinition $source
+Write-Output 'STEP:ADD_TYPE_DONE'
 
 if (-not [NativeLicenseValidator]::SetDllDirectory($licenseDir)) {
   $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
   Write-Error "SetDllDirectory failed: $errorCode"
   exit 11
 }
+Write-Output 'STEP:SET_DLL_DIRECTORY_DONE'
 
 $valid = [NativeLicenseValidator]::ParseAndVerifyLicense(${toPowerShellString(ip)}, ${port})
+Write-Output "DLL_RETURN=$valid"
 
 if ($valid) {
   Write-Output 'VALID'
@@ -186,9 +291,132 @@ function getOutputLines(value: unknown): string[] {
     .filter(Boolean)
 }
 
+function failLicenseValidation(
+  logger: LicenseLogger,
+  validationId: string,
+  startedAt: number,
+  message: string,
+  details: Record<string, unknown>
+): LicenseValidationResult {
+  logger.error('License validation failed', {
+    validationId,
+    elapsedMs: Date.now() - startedAt,
+    ...details
+  })
+
+  return {
+    valid: false,
+    message,
+    ...(logger.path ? { logPath: logger.path } : {})
+  }
+}
+
+function getLicenseRuntimeFileStates(licenseDir: string): LicenseRuntimeFileState[] {
+  return LICENSE_RUNTIME_FILES.map((name) => {
+    const filePath = join(licenseDir, name)
+
+    try {
+      const stat = statSync(filePath)
+      return {
+        name,
+        path: filePath,
+        exists: true,
+        sizeBytes: stat.size,
+        modifiedAt: stat.mtime.toISOString()
+      }
+    } catch (error) {
+      return {
+        name,
+        path: filePath,
+        exists: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+}
+
+function createLicenseLogger(): LicenseLogger {
+  try {
+    const logDir = join(app.getPath('userData'), 'logs')
+    mkdirSync(logDir, { recursive: true })
+
+    const logPath = join(logDir, LICENSE_LOG_NAME)
+    rotateLicenseLog(logPath)
+
+    return {
+      path: logPath,
+      info: (message, details) => writeLicenseLog(logPath, 'INFO', message, details),
+      error: (message, details) => writeLicenseLog(logPath, 'ERROR', message, details)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[license] Failed to initialize license log: ${message}`)
+
+    return {
+      info: (logMessage, details) => console.info(`[license] ${logMessage}`, details ?? ''),
+      error: (logMessage, details) => console.error(`[license] ${logMessage}`, details ?? '')
+    }
+  }
+}
+
+function rotateLicenseLog(logPath: string): void {
+  if (!existsSync(logPath)) {
+    return
+  }
+
+  const stat = statSync(logPath)
+  if (stat.size <= MAX_LICENSE_LOG_BYTES) {
+    return
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  renameSync(logPath, `${logPath}.${timestamp}.bak`)
+}
+
+function writeLicenseLog(
+  logPath: string,
+  level: LicenseLogLevel,
+  message: string,
+  details?: Record<string, unknown>
+): void {
+  const detailText = details ? ` ${JSON.stringify(details)}` : ''
+  const line = `${new Date().toISOString()} [${level}] ${message}${detailText}\n`
+
+  try {
+    appendFileSync(logPath, line, { encoding: 'utf8' })
+  } catch (error) {
+    const logError = error instanceof Error ? error.message : String(error)
+    console.error(`[license] Failed to write license log: ${logError}`)
+  }
+}
+
 type ExecFailure = Error & {
   code?: number | string
   killed?: boolean
+  signal?: string
   stdout?: unknown
   stderr?: unknown
 }
+
+type LicenseLogLevel = 'INFO' | 'ERROR'
+
+type LicenseLogger = {
+  path?: string
+  info: (message: string, details?: Record<string, unknown>) => void
+  error: (message: string, details?: Record<string, unknown>) => void
+}
+
+type LicenseRuntimeFileState =
+  | {
+      name: string
+      path: string
+      exists: true
+      sizeBytes: number
+      modifiedAt: string
+    }
+  | {
+      name: string
+      path: string
+      exists: false
+      error: string
+    }

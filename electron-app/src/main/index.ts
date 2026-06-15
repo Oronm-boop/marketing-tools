@@ -74,7 +74,10 @@ app.whenReady().then(async () => {
 
   const licenseValidation = await verifyLicense(BACKEND_HOST, BACKEND_PORT)
   if (!licenseValidation.valid) {
-    dialog.showErrorBox('License 验证失败', licenseValidation.message)
+    const message = licenseValidation.logPath
+      ? `${licenseValidation.message}\n\n详细日志：${licenseValidation.logPath}`
+      : licenseValidation.message
+    dialog.showErrorBox('License 验证失败', message)
     stopBackend()
     app.quit()
     return

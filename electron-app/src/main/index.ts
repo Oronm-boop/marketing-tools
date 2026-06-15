@@ -1,14 +1,16 @@
-import { app, dialog, shell, BrowserWindow, screen } from 'electron'
+import { app, shell, BrowserWindow, screen, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { BACKEND_HOST, BACKEND_PORT, startBackend, stopBackend } from './backend'
+import { startBackend, stopBackend } from './backend'
 import { verifyLicense } from './license'
 
 const PREFERRED_WINDOW_WIDTH = 1280
 const PREFERRED_WINDOW_HEIGHT = 800
 const MIN_WINDOW_WIDTH = 1024
 const MIN_WINDOW_HEIGHT = 640
+const LICENSE_VALIDATION_IP = process.env['MDT_LICENSE_IP'] || '127.0.0.1'
+const LICENSE_VALIDATION_PORT = Number(process.env['MDT_LICENSE_PORT'] || 8088)
 
 function createWindow(): void {
   const { width, height } = getInitialWindowSize()
@@ -70,19 +72,15 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  await startBackend()
-
-  const licenseValidation = await verifyLicense(BACKEND_HOST, BACKEND_PORT)
-  if (!licenseValidation.valid) {
-    const message = licenseValidation.logPath
-      ? `${licenseValidation.message}\n\n详细日志：${licenseValidation.logPath}`
-      : licenseValidation.message
-    dialog.showErrorBox('License 验证失败', message)
-    stopBackend()
-    app.quit()
+  const licenseResult = await verifyLicense(LICENSE_VALIDATION_IP, LICENSE_VALIDATION_PORT)
+  if (!licenseResult.valid) {
+    const logHint = licenseResult.logPath ? `\n\n日志位置：${licenseResult.logPath}` : ''
+    dialog.showErrorBox('License 验证失败', `${licenseResult.message}${logHint}`)
+    app.exit(1)
     return
   }
 
+  await startBackend()
   createWindow()
 
   app.on('activate', function () {

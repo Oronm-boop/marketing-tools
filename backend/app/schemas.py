@@ -113,6 +113,38 @@ class ProviderErrorResponse(BaseModel):
     detail: str
 
 
+class ModelSettingsRead(BaseModel):
+    """返回给前端的当前模型配置（API Key 脱敏显示）。"""
+
+    provider: str
+
+    local_model_base_url: str
+    local_model_name: str
+
+    ollama_base_url: str
+    ollama_model: str
+
+    qwen_api_key: str
+    qwen_base_url: str
+    qwen_model: str
+
+
+class ModelSettingsWrite(BaseModel):
+    """前端提交的模型配置更新请求。"""
+
+    provider: str = Field(pattern=r"^(local|ollama|bailian)$")
+
+    local_model_base_url: str | None = None
+    local_model_name: str | None = None
+
+    ollama_base_url: str | None = None
+    ollama_model: str | None = None
+
+    qwen_api_key: str | None = None
+    qwen_base_url: str | None = None
+    qwen_model: str | None = None
+
+
 def _clean_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         raise ValueError("字段必须是字符串数组")

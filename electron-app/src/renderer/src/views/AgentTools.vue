@@ -49,6 +49,15 @@
           <button class="icon-button" type="button" aria-label="帮助" title="帮助">
             <IconGlyph name="help" />
           </button>
+          <button
+            class="icon-button settings-btn"
+            type="button"
+            aria-label="模型设置"
+            title="模型设置"
+            @click="settingsVisible = true"
+          >
+            <IconGlyph name="settings" />
+          </button>
           <div class="avatar" aria-label="用户头像">
             <IconGlyph name="user" />
           </div>
@@ -331,6 +340,8 @@
         </section>
       </main>
     </section>
+
+    <SettingsDialog v-model:visible="settingsVisible" />
   </div>
 </template>
 
@@ -342,9 +353,10 @@ import {
   type CopywritingItem,
   type SeoKeywordItem
 } from '@api/generation'
+import SettingsDialog from '@components/SettingsDialog.vue'
 
 type ToolKey = 'seo' | 'copy'
-type IconName = 'chat' | 'bell' | 'help' | 'user' | 'searchInsights' | 'document' | 'spark'
+type IconName = 'chat' | 'bell' | 'help' | 'user' | 'searchInsights' | 'document' | 'spark' | 'settings'
 type SeoEntryRequest = {
   business: string
   features: string
@@ -403,6 +415,10 @@ const iconPaths: Record<IconName, string[]> = {
   spark: [
     'M12 3l1.7 4.4L18 9l-4.3 1.6L12 15l-1.7-4.4L6 9l4.3-1.6L12 3Z',
     'M5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8L5 14Z'
+  ],
+  settings: [
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+    'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z'
   ]
 }
 
@@ -439,6 +455,7 @@ const IconGlyph = defineComponent({
   }
 })
 
+const settingsVisible = ref(false)
 const activeTool = ref<ToolKey>('seo')
 const sessions = ref<ChatSession[]>(loadSessions())
 const activeChatId = ref(ensureInitialSessionId(sessions.value))

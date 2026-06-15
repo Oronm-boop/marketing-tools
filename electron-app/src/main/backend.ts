@@ -5,8 +5,8 @@ import { get } from 'http'
 import { join, resolve } from 'path'
 import { is } from '@electron-toolkit/utils'
 
-export const BACKEND_HOST = process.env['MDT_BACKEND_HOST'] || '127.0.0.1'
-export const BACKEND_PORT = Number(process.env['MDT_BACKEND_PORT'] || 8000)
+const BACKEND_HOST = process.env['MDT_BACKEND_HOST'] || '127.0.0.1'
+const BACKEND_PORT = Number(process.env['MDT_BACKEND_PORT'] || 8088)
 const BACKEND_HEALTH_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}/health`
 
 let backendProcess: ChildProcess | null = null

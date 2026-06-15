@@ -12,6 +12,13 @@ class LocalModelClientError(RuntimeError):
 class LocalModelClient:
     def __init__(self, settings: Settings):
         self.settings = settings
+        # ollama provider 使用单独的 base_url / model_name
+        if settings.model_provider == "ollama":
+            self._base_url = settings.ollama_base_url
+            self._model_name = settings.ollama_model
+        else:
+            self._base_url = settings.local_model_base_url
+            self._model_name = settings.local_model_name
 
     async def complete_json(
         self,
@@ -22,10 +29,10 @@ class LocalModelClient:
         api_mode: str = "completions",
     ) -> str:
         if api_mode == "chat":
-            endpoint = self.settings.local_model_base_url.rstrip("/") + "/chat/completions"
+            endpoint = self._base_url.rstrip("/") + "/chat/completions"
             payload = self._build_chat_payload(system_prompt, user_prompt, temperature, max_tokens)
         else:
-            endpoint = self.settings.local_model_base_url.rstrip("/") + "/completions"
+            endpoint = self._base_url.rstrip("/") + "/completions"
             payload = self._build_completions_payload(system_prompt, user_prompt, temperature, max_tokens)
 
         try:
@@ -59,7 +66,7 @@ class LocalModelClient:
         max_tokens: int | None,
     ) -> dict[str, Any]:
         return {
-            "model": self.settings.local_model_name,
+            "model": self._model_name,
             "prompt": build_completion_prompt(system_prompt, user_prompt),
             "max_tokens": max_tokens or self.settings.local_model_max_tokens,
             "temperature": temperature,
@@ -74,16 +81,19 @@ class LocalModelClient:
         temperature: float,
         max_tokens: int | None,
     ) -> dict[str, Any]:
-        return {
-            "model": self.settings.local_model_name,
+        payload: dict[str, Any] = {
+            "model": self._model_name,
             "messages": build_chat_messages(system_prompt, user_prompt),
             "max_tokens": max_tokens or self.settings.local_model_max_tokens,
             "temperature": temperature,
             "top_p": self.settings.local_model_top_p,
-            "enable_thinking": False,
-            "chat_template_kwargs": {"enable_thinking": False},
             "stream": False,
         }
+        # 仅对局域网AI一体机禁用思考模式（Ollama 不支持该参数）
+        if self.settings.model_provider != "ollama":
+            payload["enable_thinking"] = False
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+        return payload
 
 
 def build_chat_messages(system_prompt: str, user_prompt: str) -> list[dict[str, str]]:

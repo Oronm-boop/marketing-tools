@@ -13,7 +13,12 @@ class QwenClient:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    async def chat_json(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat_json(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> str:
         if self.settings.qwen_api_key is None:
             raise QwenClientError("缺少 QWEN_API_KEY，请在后端环境变量或后端 .env 中配置百炼 API Key")
 
@@ -23,8 +28,11 @@ class QwenClient:
             "messages": messages,
             "temperature": temperature,
             "response_format": {"type": "json_object"},
-            "enable_thinking": self.settings.qwen_enable_thinking,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if self.settings.qwen_enable_thinking:
+            payload["enable_thinking"] = True
         headers = {
             "Authorization": f"Bearer {self.settings.qwen_api_key.get_secret_value()}",
             "Content-Type": "application/json",

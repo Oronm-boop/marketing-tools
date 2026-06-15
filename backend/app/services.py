@@ -4,8 +4,9 @@ from pydantic import TypeAdapter, ValidationError
 
 from .config import Settings
 from .json_utils import JSONExtractionError, extract_json_payload
-from .local_model_client import LocalModelClient, LocalModelClientError
+from .local_model_client import LocalModelClient, LocalModelClientError, build_chat_messages
 from .prompts import SYSTEM_PROMPT, build_copywriting_user_prompt, build_seo_user_prompt
+from .qwen_client import QwenClient, QwenClientError
 from .schemas import (
     CopywritingItem,
     CopywritingRequest,
@@ -28,14 +29,26 @@ class GenerationServiceError(RuntimeError):
 class GenerationService:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.client = LocalModelClient(settings)
+        self.provider = settings.model_provider
+        if self.provider == "bailian":
+            self.client = QwenClient(settings)
+        else:
+            self.client = LocalModelClient(settings)
+
+    @property
+    def model_name(self) -> str:
+        """当前生效的模型名称，用于返回给前端展示。"""
+        if self.provider == "bailian":
+            return self.settings.qwen_model
+        if self.provider == "ollama":
+            return self.settings.ollama_model
+        return self.settings.local_model_name
 
     async def generate_seo_keywords(self, payload: SeoKeywordRequest) -> SeoKeywordResponse:
         content = await self._call_model(
             build_seo_user_prompt(payload),
             temperature=0.6,
-            max_tokens=min(self.settings.local_model_max_tokens, 2048),
-            api_mode="completions",
+            max_tokens=2048,
         )
         raw_items = _extract_items(content, label="SEO 关键词")
 
@@ -44,7 +57,7 @@ class GenerationService:
         except ValidationError as exc:
             raise GenerationServiceError(f"SEO 关键词 JSON 字段校验失败：{exc}") from exc
 
-        return SeoKeywordResponse(items=items[: payload.keyword_count], model=self.settings.local_model_name)
+        return SeoKeywordResponse(items=items[: payload.keyword_count], model=self.model_name)
 
     async def generate_copywriting(self, payload: CopywritingRequest) -> CopywritingResponse:
         target_count = max(payload.article_count, len(payload.platform_styles))
@@ -52,8 +65,7 @@ class GenerationService:
         content = await self._call_model(
             build_copywriting_user_prompt(payload),
             temperature=0.5,
-            max_tokens=max(self.settings.local_model_max_tokens, min(12000, 2048 + target_count * 1600)),
-            api_mode="chat",
+            max_tokens=min(12000, max(2048, 2048 + target_count * 1600)),
         )
         raw_items = _extract_items(content, label="宣传文案")
 
@@ -79,14 +91,39 @@ class GenerationService:
                 "、".join(payload.platform_styles),
             )
 
-        return CopywritingResponse(items=items[:target_count], model=self.settings.local_model_name)
+        return CopywritingResponse(items=items[:target_count], model=self.model_name)
 
     async def _call_model(
         self,
         user_prompt: str,
         temperature: float,
         max_tokens: int | None = None,
-        api_mode: str = "completions",
+    ) -> str:
+        if self.provider == "bailian":
+            return await self._call_bailian(user_prompt, temperature, max_tokens)
+        return await self._call_local(user_prompt, temperature, max_tokens)
+
+    async def _call_bailian(
+        self,
+        user_prompt: str,
+        temperature: float,
+        max_tokens: int | None,
+    ) -> str:
+        messages = build_chat_messages(SYSTEM_PROMPT, user_prompt)
+        try:
+            return await self.client.chat_json(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except QwenClientError as exc:
+            raise GenerationServiceError(str(exc)) from exc
+
+    async def _call_local(
+        self,
+        user_prompt: str,
+        temperature: float,
+        max_tokens: int | None,
     ) -> str:
         try:
             return await self.client.complete_json(
@@ -94,7 +131,7 @@ class GenerationService:
                 user_prompt,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                api_mode=api_mode,
+                api_mode="chat",
             )
         except LocalModelClientError as exc:
             raise GenerationServiceError(str(exc)) from exc

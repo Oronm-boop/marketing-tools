@@ -9,6 +9,7 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!License/**'
 asarUnpack:
   - resources/**
 extraResources:
@@ -16,6 +17,8 @@ extraResources:
     to: backend/mdt-ai-backend.exe
   - from: ../backend/.env.example
     to: backend/.env.example
+  - from: License
+    to: License
 win:
   executableName: electron-app
 nsis:

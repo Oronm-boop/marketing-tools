@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { app } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, statSync } from 'fs'
+import { createRequire } from 'module'
 import { delimiter, dirname, join, resolve } from 'path'
 
 const DLL_NAMES = ['LicenseVallidator.dll', 'LicenseValidator.dll']
@@ -16,6 +17,8 @@ const LICENSE_RUNTIME_SIDECAR_FILES = [
   'websockets.dll',
   'zlib1.dll'
 ]
+
+const nodeRequire = createRequire(__filename)
 
 export interface LicenseResult {
   ok: boolean
@@ -197,8 +200,8 @@ const writeResult = (payload) => {
 };
 
 try {
-  const [dllPath, ip, portText] = process.argv.slice(1);
-  const koffi = require('koffi');
+  const [dllPath, ip, portText, koffiEntryPath] = process.argv.slice(1);
+  const koffi = require(koffiEntryPath);
   const lib = koffi.load(dllPath);
   const parseAndVerifyLicense = lib.func(
     'bool __stdcall ' + EXPORT_NAME + '(const char *ip, int port)'
@@ -215,6 +218,18 @@ try {
   process.exit(1);
 }
 `
+
+const resolveKoffiEntryPath = (logFile: string | undefined): string | null => {
+  try {
+    const koffiEntryPath = nodeRequire.resolve('koffi')
+    writeLog(logFile, `resolved koffi entry="${koffiEntryPath}"`)
+    return koffiEntryPath
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    writeLog(logFile, `failed to resolve koffi: ${message}`)
+    return null
+  }
+}
 
 const getChildNodePath = (): string => {
   const nodePaths = [
@@ -250,6 +265,7 @@ const runLicenseWorker = (
   dllPath: string,
   ip: string,
   port: number,
+  koffiEntryPath: string,
   timeoutMs: number,
   logFile: string | undefined
 ): Promise<boolean> =>
@@ -267,15 +283,19 @@ const runLicenseWorker = (
     )
     writeLog(logFile, `worker NODE_PATH="${childNodePath}"`)
 
-    const child = spawn(process.execPath, ['-e', getWorkerScript(), dllPath, ip, String(port)], {
-      cwd: workerCwd,
-      windowsHide: true,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        NODE_PATH: childNodePath
+    const child = spawn(
+      process.execPath,
+      ['-e', getWorkerScript(), dllPath, ip, String(port), koffiEntryPath],
+      {
+        cwd: workerCwd,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          NODE_PATH: childNodePath
+        }
       }
-    })
+    )
 
     writeLog(logFile, `license worker pid=${child.pid ?? 'unknown'}`)
 
@@ -382,9 +402,18 @@ export const verifyLicense = async (): Promise<LicenseResult> => {
 
     const { ip, port } = getLicenseEndpoint()
     const timeoutMs = parseTimeout(process.env.LICENSE_CHECK_TIMEOUT_MS)
+    const koffiEntryPath = resolveKoffiEntryPath(logFile)
+    if (!koffiEntryPath) {
+      return {
+        ok: false,
+        reason: 'Cannot find koffi dependency. Please run npm install in electron-app.',
+        logFile
+      }
+    }
+
     writeLog(logFile, `calling ${EXPORT_NAME}("${ip}", ${port}) from "${dllPath}"`)
 
-    const ok = await runLicenseWorker(dllPath, ip, port, timeoutMs, logFile)
+    const ok = await runLicenseWorker(dllPath, ip, port, koffiEntryPath, timeoutMs, logFile)
     writeLog(logFile, `${EXPORT_NAME} returned ${ok}`)
 
     if (!ok) {

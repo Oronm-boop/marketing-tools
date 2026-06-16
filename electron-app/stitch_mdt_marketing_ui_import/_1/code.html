@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MDT Marketing - 账号管理</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-styles">
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .sidebar-active {
+      background-color: #2563eb; /* Tailwind blue-600 */
+      color: white;
+    }
+    .sidebar-active i {
+      color: white;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+    .browser-frame {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 h-screen flex overflow-hidden">
+<!-- BEGIN: Sidebar -->
+<aside class="w-64 bg-white border-r border-gray-200 flex flex-col h-full flex-shrink-0" data-purpose="sidebar">
+<!-- Logo -->
+<div class="h-16 flex items-center px-6 border-b border-gray-100">
+<h1 class="text-xl font-bold text-blue-700">MDT Marketing</h1>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+<a class="flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-gray-100 group transition-colors" href="#">
+<i class="fa-solid fa-chart-line w-6 text-gray-500 group-hover:text-gray-700"></i>
+<span class="text-sm font-medium">热点分析</span>
+</a>
+<a class="flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-gray-100 group transition-colors" href="#">
+<i class="fa-solid fa-magnifying-glass w-6 text-gray-500 group-hover:text-gray-700"></i>
+<span class="text-sm font-medium">SEO关键词</span>
+</a>
+<a class="flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-gray-100 group transition-colors" href="#">
+<i class="fa-solid fa-file-lines w-6 text-gray-500 group-hover:text-gray-700"></i>
+<span class="text-sm font-medium">宣传文案工具</span>
+</a>
+<a class="flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-gray-100 group transition-colors" href="#">
+<i class="fa-solid fa-arrow-up-from-bracket w-6 text-gray-500 group-hover:text-gray-700"></i>
+<span class="text-sm font-medium">发布中心</span>
+</a>
+<a class="flex items-center px-3 py-2.5 rounded-md sidebar-active transition-colors" href="#">
+<i class="fa-regular fa-circle-user w-6"></i>
+<span class="text-sm font-medium">账号管理</span>
+</a>
+<a class="flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-gray-100 group transition-colors" href="#">
+<i class="fa-solid fa-gear w-6 text-gray-500 group-hover:text-gray-700"></i>
+<span class="text-sm font-medium">设置</span>
+</a>
+</nav>
+<!-- Help Center Button -->
+<div class="p-4 border-t border-gray-200">
+<button class="w-full flex items-center justify-center py-2 px-4 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-sm font-medium">
+<i class="fa-regular fa-circle-question mr-2"></i>
+        帮助中心
+      </button>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- BEGIN: Main Content -->
+<main class="flex-1 flex flex-col h-full bg-white relative" data-purpose="main-content">
+<!-- Header -->
+<header class="h-16 flex items-center justify-between px-6 border-b border-gray-200 flex-shrink-0">
+<h2 class="text-lg font-medium text-gray-800">账号管理</h2>
+<div class="flex items-center space-x-4">
+<button class="text-gray-500 hover:text-gray-700 focus:outline-none">
+<i class="fa-regular fa-bell text-lg"></i>
+</button>
+<button class="text-gray-500 hover:text-gray-700 focus:outline-none">
+<i class="fa-regular fa-circle-question text-lg"></i>
+</button>
+<div class="w-8 h-8 rounded-full bg-gray-200 overflow-hidden border border-gray-300">
+<!-- Placeholder for user avatar -->
+<img alt="User Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMNeVZHNqp0-l0reUa1A2199ulIaXVeTRpAgdhl7WWYLdo8C5JUN8V7hU3ySjJSzJEbUHi_1yuyONW-l7P_sI2EB3TUfgEgkMnwkOAYSPgt7rRDMntgoBPVjf5COZSY5sK1f0daKXIrS1-VzhwTsUbhB7_pgaWXDEXqc_PtvB2t4RuPnq1vrSf6gj3PR4X-f5KJs0c2793bHcKJiKSAhghFPlmXkH8VnbLrWI5Cywe4qQB7Um_q9-Q3vQGe1eMLCfEuOVkzZIUioZa"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Content Area -->
+<div class="flex-1 overflow-y-auto p-6 flex flex-col custom-scrollbar">
+<!-- Account Cards Row -->
+<div class="flex space-x-4 mb-6 pb-6 border-b border-gray-200">
+<!-- Active Account Card -->
+<div class="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg min-w-[200px]">
+<div class="relative w-10 h-10 rounded-full overflow-hidden mr-3">
+<img alt="Account Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZMdFsPyc5v8OxFY02QsgJQFsGBpB9V54xV0TNnaylLRtOLo-ZuB1H5r-k7GjYf04zQx22xe2FrpQ7F0zEyiPL4g8PVb_oSo7Rwb8wfSQvxscxJS27xyhnaktkkf5jZHZP4suKjJzLJwZw7gvovO_rFWSTxwTILfW4eOUNLUD1BHi9O9cMqav2-tXvwQYUkb7JyZk574txmrEwbQaGq8Dd2mgkfze0507hkDOI1W9VcHArY_hRJqGoPNYKMwo-7WNAuMWDAEOiGkGQ"/>
+<div class="absolute bottom-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold border border-white">
+                小红书
+             </div>
+</div>
+<div class="text-sm">
+<span class="font-medium text-gray-800">hh2.3.3.3</span>
+<span class="text-gray-500 ml-1">--小红书</span>
+</div>
+</div>
+<!-- Inactive Account Card 1 -->
+<div class="flex items-center p-3 bg-white border border-gray-200 rounded-lg min-w-[200px] cursor-pointer hover:border-gray-300">
+<div class="relative w-10 h-10 rounded-full overflow-hidden mr-3">
+<img alt="Account Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4_uTTuyN-OXx2QAqvZjvwdyLVP2UAUotTONyTbjnd3rwTNxM8rpxGkF2qH_Le8gwf5nNAG-qTykYzLAmTFra77rJztECMvwJN6ieil5_iATupQD6-mfBZMcGYsPMbmo2--TOqypbTcH0gFMKkAigazwAXIDfKjvsRXZyJwBDs0gpp6ItRj4NfrNwiAV0DCnGs54ahAKvFegtWx3gqhMctJSsFLmMKbCFdPq3Yu3oWmJt6H_yBGO8nGJcP9qPYiblZOn85Iq0guIvt"/>
+<div class="absolute bottom-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold border border-white">
+                小红书
+             </div>
+</div>
+<div class="text-sm">
+<span class="font-medium text-gray-800">hh2.3.3.3</span>
+<span class="text-gray-500 ml-1">--小红书</span>
+</div>
+</div>
+<!-- Inactive Account Card 2 -->
+<div class="flex items-center p-3 bg-white border border-gray-200 rounded-lg min-w-[200px] cursor-pointer hover:border-gray-300">
+<div class="relative w-10 h-10 rounded-full overflow-hidden mr-3">
+<img alt="Account Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWQnQv1GKqnT7qJC7KjdxxHsXN3lGYjfP119YLS93o6n-9EMH3J9jxCVcMY0wMFmR9Ds93UJ9rEGoMu8ZmqGjlEYP_O1YOPqJqwJ6AuiB2-k79VaxVkXYhHRx73tSxepAjjLPfYWqbduL1xN3mbZHvdc6lKxmlbcnZDbGoEI9PGguIJX9fXIU3dkO_7RfyT6qOBUhrLnK3NftlJ4FpPMPpSlbbIoaJDqc1bCRn4yGX751Wx7ls_c3FVEDRoe5dBA4s-ivyp0B19luX"/>
+<div class="absolute bottom-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold border border-white">
+                小红书
+             </div>
+</div>
+<div class="text-sm">
+<span class="font-medium text-gray-800">hh2.3.3.3</span>
+<span class="text-gray-500 ml-1">--小红书</span>
+</div>
+</div>
+</div>
+<!-- Action Buttons Row -->
+<div class="flex space-x-3 mb-6">
+<button class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors shadow-sm">
+          添加账号
+        </button>
+<button class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors shadow-sm">
+          同步账号
+        </button>
+<button class="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded border border-gray-300 hover:bg-gray-50 transition-colors">
+          账号管理
+        </button>
+<button class="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded border border-gray-300 hover:bg-gray-50 transition-colors">
+          账号分组
+        </button>
+<button class="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded border border-gray-300 hover:bg-gray-50 transition-colors">
+          一键重新登录
+        </button>
+</div>
+<!-- Browser Frame / Login Area -->
+<div class="flex-1 flex flex-col border border-gray-200 rounded-lg bg-white overflow-hidden browser-frame relative">
+<!-- Browser Header/Toolbar -->
+<div class="bg-[#f3f4f6] border-b border-gray-200 px-3 py-2 flex items-center justify-between text-xs text-gray-500 rounded-t-lg">
+<div class="flex items-center space-x-4">
+<span class="font-medium text-gray-700">登录账号</span>
+</div>
+<div class="flex items-center space-x-3">
+<i class="fa-regular fa-window-minimize cursor-pointer hover:text-gray-700"></i>
+<i class="fa-regular fa-window-maximize cursor-pointer hover:text-gray-700"></i>
+<i class="fa-solid fa-xmark cursor-pointer hover:text-gray-700 text-sm"></i>
+</div>
+</div>
+<!-- Browser Address Bar -->
+<div class="bg-white border-b border-gray-200 px-3 py-2 flex items-center space-x-3 text-gray-400 text-sm">
+<i class="fa-solid fa-arrow-left cursor-not-allowed"></i>
+<i class="fa-solid fa-arrow-right cursor-not-allowed"></i>
+<i class="fa-solid fa-rotate-right cursor-pointer hover:text-gray-600"></i>
+<div class="flex-1 bg-gray-100 rounded-full px-4 py-1.5 flex items-center text-xs text-gray-600">
+<span class="truncate">https://creator.xiaohongshu.com/login</span>
+</div>
+<div class="flex items-center space-x-3 text-xs">
+<span class="cursor-pointer hover:text-gray-600 flex items-center"><i class="fa-solid fa-link mr-1"></i> 复制标题和链接</span>
+<span class="cursor-pointer hover:text-gray-600 flex items-center"><i class="fa-solid fa-link mr-1"></i> 复制链接</span>
+<div class="flex items-center bg-gray-100 rounded px-2 py-0.5 space-x-1 border border-gray-200">
+<i class="fa-solid fa-minus text-[10px] cursor-pointer"></i>
+<span>100</span>
+<i class="fa-solid fa-plus text-[10px] cursor-pointer"></i>
+</div>
+</div>
+</div>
+<!-- Warning Banner -->
+<div class="bg-[#fff9e6] text-[#eab308] text-xs py-2 px-4 flex justify-between items-center border-b border-yellow-100">
+<span class="flex-1 text-center font-medium">请登录自媒体账号来添加账号，登录成功后系统会自动添加账号</span>
+<a class="text-blue-500 hover:underline" href="#">无法添加账号?</a>
+</div>
+<!-- Login Content Area (Replicating Xiaohongshu Login) -->
+<div class="flex-1 bg-gradient-to-br from-blue-50/50 to-pink-50/30 relative overflow-hidden flex flex-col justify-center items-center">
+<!-- Background decorative shapes (simulated) -->
+<div class="absolute inset-0 z-0 pointer-events-none opacity-40">
+<div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl"></div>
+<div class="absolute top-1/3 right-1/4 w-96 h-96 bg-pink-100 rounded-full mix-blend-multiply filter blur-3xl"></div>
+</div>
+<!-- Login Container -->
+<div class="relative z-10 w-full max-w-5xl px-8 flex justify-between items-start mt-[-10vh]">
+<!-- Left Text Content -->
+<div class="pt-10">
+<div class="flex items-center space-x-2 mb-10">
+<!-- Simulated Logo -->
+<div class="bg-red-500 text-white font-bold px-2 py-1 rounded text-sm italic">小红书</div>
+<span class="text-xl font-bold text-gray-800">创作服务平台</span>
+</div>
+<h1 class="text-5xl font-bold text-gray-800 leading-tight mb-4 tracking-tight">
+                加入我们<br/>解锁创作者专属功能
+              </h1>
+<p class="text-gray-500 text-lg">让创作发布、数据分析、商业变现更高效。</p>
+</div>
+<!-- Right Login Box -->
+<div class="bg-white rounded-2xl shadow-xl w-[380px] p-8 border border-gray-100 relative overflow-hidden">
+<!-- Decorative top right dots -->
+<div class="absolute top-4 right-4 grid grid-cols-3 gap-1 opacity-20">
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+</div>
+<h2 class="text-lg font-bold text-gray-800 mb-6">短信登录</h2>
+<form>
+<!-- Phone Input -->
+<div class="flex mb-4 border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+<div class="bg-gray-50 border-r border-gray-300 px-3 py-2.5 flex items-center text-sm text-gray-600 w-20">
+                      +86 <i class="fa-solid fa-chevron-down ml-auto text-[10px] text-gray-400"></i>
+</div>
+<input class="flex-1 px-3 py-2.5 text-sm outline-none border-none focus:ring-0" placeholder="手机号" type="text"/>
+</div>
+<!-- Verification Code Input -->
+<div class="flex mb-2 border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+<input class="flex-1 px-3 py-2.5 text-sm outline-none border-none focus:ring-0" placeholder="验证码" type="text"/>
+<button class="px-4 py-2.5 text-sm text-gray-500 border-l border-gray-300 bg-gray-50 hover:bg-gray-100 whitespace-nowrap" type="button">
+                      发送验证码
+                    </button>
+</div>
+<div class="mb-8">
+<a class="text-xs text-blue-500 hover:underline" href="#">收不到验证码?</a>
+</div>
+<!-- Submit Button -->
+<button class="w-full bg-red-500 text-white font-medium py-3 rounded-full hover:bg-red-600 transition-colors mb-4 shadow-md shadow-red-500/30" type="button">
+                    登录
+                  </button>
+<!-- Agreement Checkbox -->
+<div class="flex items-start">
+<input class="mt-1 mr-2 border-gray-300 rounded text-red-500 focus:ring-red-500 h-3 w-3" id="agreement" type="checkbox"/>
+<label class="text-xs text-gray-500 leading-tight" for="agreement">
+                      登录即同意 <a class="text-gray-700 hover:underline" href="#">用户协议</a> 和 <a class="text-gray-700 hover:underline" href="#">隐私政策</a>
+</label>
+</div>
+</form>
+</div>
+<!-- Top Right Link outside login box -->
+<div class="absolute top-8 right-10 z-20">
+<a class="text-gray-500 hover:text-gray-700 text-sm border-b border-gray-300 pb-0.5" href="#">创作百科</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- History Footer -->
+<div class="h-10 border-t border-gray-200 bg-gray-50 flex items-center px-4 flex-shrink-0 text-gray-600 text-sm">
+<i class="fa-solid fa-clock-rotate-left mr-2"></i>
+<span>历史记录</span>
+</div>
+</main>
+<!-- END: Main Content -->
+</body></html>

@@ -327,7 +327,11 @@ watch(
       successMsg.value = ''
       showApiKey.value = false
       if (!settingsStore.loading) {
-        await settingsStore.load()
+        try {
+          await settingsStore.load()
+        } catch (e: unknown) {
+          errorMsg.value = e instanceof Error ? e.message : '加载模型设置失败，请确认后端服务已启动'
+        }
       }
       syncFromStore()
     }

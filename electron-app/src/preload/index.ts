@@ -10,6 +10,11 @@ const api = {
       accountId: string
       url?: string
       title?: string
+      profile?: {
+        nickname?: string
+        avatarUrl?: string
+        capturedAt?: number
+      }
       webStorage?: {
         localStorage: Record<string, string>
         sessionStorage: Record<string, string>

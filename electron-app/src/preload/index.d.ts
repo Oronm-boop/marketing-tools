@@ -6,6 +6,9 @@ type XiaohongshuAccount = {
   id: string
   platform: 'xiaohongshu'
   name: string
+  nickname?: string
+  avatarUrl?: string
+  profileCapturedAt?: number
   partition: string
   status: XiaohongshuAccountStatus
   createdAt: number
@@ -25,6 +28,12 @@ type XiaohongshuWebStorageSnapshot = {
   url?: string
 }
 
+type XiaohongshuProfileSnapshot = {
+  nickname?: string
+  avatarUrl?: string
+  capturedAt?: number
+}
+
 type XiaohongshuAccountsAPI = {
   list: () => Promise<XiaohongshuAccount[]>
   create: (payload?: { name?: string }) => Promise<XiaohongshuAccount>
@@ -32,6 +41,7 @@ type XiaohongshuAccountsAPI = {
     accountId: string
     url?: string
     title?: string
+    profile?: XiaohongshuProfileSnapshot
     webStorage?: XiaohongshuWebStorageSnapshot
   }) => Promise<XiaohongshuAccount>
   getWebStorage: (accountId: string) => Promise<XiaohongshuWebStorageSnapshot | null>

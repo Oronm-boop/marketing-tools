@@ -27,6 +27,9 @@ type XhsAccountRecord = {
   id: string
   platform: 'xiaohongshu'
   name: string
+  nickname?: string
+  avatarUrl?: string
+  profileCapturedAt?: number
   partition: string
   status: XhsAccountStatus
   createdAt: number
@@ -56,7 +59,14 @@ type SaveSessionPayload = {
   accountId: string
   url?: string
   title?: string
+  profile?: XhsProfileSnapshot
   webStorage?: WebStorageSnapshot
+}
+
+type XhsProfileSnapshot = {
+  nickname?: string
+  avatarUrl?: string
+  capturedAt?: number
 }
 
 export function registerXiaohongshuAccountIpc(): void {
@@ -105,6 +115,7 @@ export function registerXiaohongshuAccountIpc(): void {
     await flushStorageData(accountSession)
 
     const webStorage = normalizeWebStorage(payload.webStorage, payload.url)
+    const profile = normalizeProfile(payload.profile)
     const now = Date.now()
     account.updatedAt = now
     account.lastSessionSaveAt = now
@@ -120,6 +131,12 @@ export function registerXiaohongshuAccountIpc(): void {
 
     if (payload.title) {
       account.name = deriveAccountName(account.name, payload.title)
+    }
+
+    if (profile) {
+      account.nickname = profile.nickname || account.nickname
+      account.avatarUrl = profile.avatarUrl || account.avatarUrl
+      account.profileCapturedAt = profile.capturedAt
     }
 
     account.encryptedCookies = protectString(JSON.stringify(xhsCookies.map(serializeCookie)))
@@ -191,10 +208,16 @@ function normalizeAccountRecord(record: Partial<XhsAccountRecord>): XhsAccountRe
   if (!record?.id || !record.partition) return null
 
   const now = Date.now()
+  const nickname = normalizeAccountName(record.nickname)
+  const avatarUrl = normalizeAvatarUrl(record.avatarUrl)
+
   return {
     id: String(record.id),
     platform: 'xiaohongshu',
     name: normalizeAccountName(record.name) || '小红书账号',
+    nickname: nickname || undefined,
+    avatarUrl: avatarUrl || undefined,
+    profileCapturedAt: Number(record.profileCapturedAt) || undefined,
     partition: String(record.partition),
     status: record.status === 'saved' ? 'saved' : 'pending',
     createdAt: Number(record.createdAt) || now,
@@ -227,6 +250,29 @@ function getStorePath(): string {
 
 function normalizeAccountName(value?: string): string {
   return typeof value === 'string' ? value.trim().slice(0, 32) : ''
+}
+
+function normalizeProfile(profile?: XhsProfileSnapshot): XhsProfileSnapshot | null {
+  if (!profile) return null
+
+  const nickname = normalizeAccountName(profile.nickname)
+  const avatarUrl = normalizeAvatarUrl(profile.avatarUrl)
+  if (!nickname && !avatarUrl) return null
+
+  return {
+    nickname,
+    avatarUrl,
+    capturedAt: Number(profile.capturedAt) || Date.now()
+  }
+}
+
+function normalizeAvatarUrl(value?: string): string {
+  if (typeof value !== 'string') return ''
+
+  const url = value.trim()
+  if (!url) return ''
+  if (url.startsWith('//')) return `https:${url}`.slice(0, 512)
+  return /^https?:\/\//i.test(url) ? url.slice(0, 512) : ''
 }
 
 function deriveAccountName(currentName: string, pageTitle: string): string {

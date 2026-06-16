@@ -339,28 +339,31 @@
                 <span>标题</span>
                 <input v-model="publishDraft.title" type="text" placeholder="输入文章标题..." />
               </label>
-              <label class="input-field tag-field">
+              <div class="input-field tag-field">
                 <span>标签</span>
                 <div class="tag-row">
-                  <button v-for="tag in publishDraft.tags" :key="tag" type="button">
-                    {{ tag }} <span>×</span>
-                  </button>
+                  <span v-for="tag in publishDraft.tags" :key="tag" class="tag-pill">
+                    <span class="tag-text">{{ tag }}</span>
+                    <button
+                      class="tag-remove-button"
+                      type="button"
+                      :aria-label="`删除标签 ${tag}`"
+                      @click.stop="removePublishTag(tag)"
+                    >
+                      ×
+                    </button>
+                  </span>
                 </div>
-                <input type="text" placeholder="添加新标签，按回车确认..." />
-              </label>
+                <input
+                  v-model="tagInput"
+                  type="text"
+                  placeholder="添加新标签，按回车确认..."
+                  @keydown.enter="handlePublishTagEnter"
+                />
+              </div>
             </article>
 
             <article class="editor-card">
-              <div class="editor-toolbar" aria-label="编辑工具栏">
-                <button v-for="tool in editorTools" :key="tool" type="button">{{ tool }}</button>
-                <span></span>
-                <button type="button"><IconGlyph name="image" /></button>
-                <button type="button"><IconGlyph name="link" /></button>
-                <button class="ai-button" type="button">
-                  <IconGlyph name="spark" />
-                  <span>AI Optimized</span>
-                </button>
-              </div>
               <textarea v-model="publishDraft.content" placeholder="在此输入正文"></textarea>
             </article>
           </section>
@@ -385,14 +388,30 @@
 
               <fieldset class="publish-platform-list">
                 <legend>发布平台</legend>
-                <label v-for="platform in publishPlatforms" :key="platform.name" :class="{ failed: platform.failed }">
-                  <span class="platform-logo" :class="platform.color"><IconGlyph :name="platform.icon" /></span>
-                  <span>
-                    <strong>{{ platform.name }}</strong>
-                    <em>{{ platform.failed ? '登录失败' : '已连接' }}</em>
+                <label
+                  v-for="account in loggedInPublishAccounts"
+                  :key="account.id"
+                  :class="{ checked: publishDraft.platforms.includes(account.id) }"
+                >
+                  <span class="publish-account-avatar" :class="[account.avatarClass, { 'has-image': account.visibleAvatarUrl }]">
+                    <img
+                      v-if="account.visibleAvatarUrl"
+                      :src="account.visibleAvatarUrl"
+                      :alt="`${account.displayName}头像`"
+                      @error="markAvatarAsBroken(account.id)"
+                    />
+                    <span v-else class="account-avatar-fallback">{{ account.initial }}</span>
+                    <i>小红书</i>
                   </span>
-                  <input v-model="publishDraft.platforms" :value="platform.name" type="checkbox" />
+                  <span>
+                    <strong>{{ account.displayName }}</strong>
+                    <em>小红书 · 已连接</em>
+                  </span>
+                  <input v-model="publishDraft.platforms" :value="account.id" type="checkbox" />
                 </label>
+                <p v-if="!loggedInPublishAccounts.length" class="publish-platform-empty">
+                  暂无已登录的小红书账号
+                </p>
               </fieldset>
             </article>
 
@@ -428,11 +447,18 @@
               type="button"
               @click="selectXhsAccount(account.id)"
             >
-              <span class="account-avatar" :class="account.avatarClass">
-                <span>{{ account.initial }}</span>
+              <span class="account-avatar" :class="[account.avatarClass, { 'has-image': account.visibleAvatarUrl }]">
+                <img
+                  v-if="account.visibleAvatarUrl"
+                  :src="account.visibleAvatarUrl"
+                  :alt="`${account.displayName}头像`"
+                  referrerpolicy="no-referrer"
+                  @error="markAvatarAsBroken(account.id)"
+                />
+                <span v-else class="account-avatar-fallback">{{ account.initial }}</span>
                 <i>小红书</i>
               </span>
-              <strong>{{ account.name }}<em>-小红书</em></strong>
+              <strong>{{ account.displayName }}<em>-小红书</em></strong>
               <small>{{ formatAccountStatus(account) }}</small>
             </button>
           </article>
@@ -447,7 +473,7 @@
 
           <article class="login-browser-frame">
             <div class="login-window-title">
-              <span>登录账号：{{ activeXhsAccount?.name ?? '小红书账号' }}</span>
+              <span>登录账号：{{ activeXhsAccount ? getAccountDisplayName(activeXhsAccount) : '小红书账号' }}</span>
               <div>
                 <button type="button">□</button>
                 <button type="button">×</button>
@@ -617,6 +643,9 @@ type XiaohongshuAccount = {
   id: string
   platform: 'xiaohongshu'
   name: string
+  nickname?: string
+  avatarUrl?: string
+  profileCapturedAt?: number
   partition: string
   status: XiaohongshuAccountStatus
   createdAt: number
@@ -636,10 +665,18 @@ type XiaohongshuWebStorageSnapshot = {
   url?: string
 }
 
+type XiaohongshuProfileSnapshot = {
+  nickname?: string
+  avatarUrl?: string
+  capturedAt?: number
+}
+
 type XiaohongshuAccountView = XiaohongshuAccount & {
   active: boolean
+  displayName: string
   initial: string
   avatarClass: string
+  visibleAvatarUrl: string
 }
 
 type XiaohongshuWebviewElement = HTMLElement & {
@@ -673,6 +710,7 @@ const xhsAccountLoading = ref(false)
 const xhsSessionMessage = ref('正在读取小红书账号环境...')
 const currentXhsUrl = ref(XIAOHONGSHU_HOME_URL)
 const xhsStartUrls = reactive<Record<string, string>>({})
+const brokenAvatarAccountIds = ref<Set<string>>(new Set())
 let xhsAutoSaveTimer: number | null = null
 const restoredXhsStorageAccountIds = new Set<string>()
 
@@ -693,7 +731,7 @@ const activeXhsAccount = computed(() => {
 const activeXhsStartUrl = computed(() => {
   const account = activeXhsAccount.value
   if (!account) return XIAOHONGSHU_HOME_URL
-  return xhsStartUrls[account.id] || account.lastUrl || XIAOHONGSHU_HOME_URL
+  return getXhsLaunchUrl(account)
 })
 
 const pageTitles: Record<PageKey, string> = {
@@ -869,29 +907,27 @@ const copyError = ref('')
 const copyResults = ref<CopywritingItem[]>([])
 const copyModel = ref('')
 const displayedCopyResults = computed(() => (copyResults.value.length ? copyResults.value : sampleCopyResults))
+const tagInput = ref('')
 
 const publishDraft = reactive({
   title: '',
   tags: ['#AI营销', '#数据分析', '#增长黑客'],
   content: '',
   schedule: 'now',
-  platforms: ['公众号 (用户1)']
+  platforms: [] as string[]
 })
-const editorTools = ['B', 'I', 'U', '—', '≡', '☷', '☰', '•', '1.']
-const publishPlatforms: Array<{ name: string; failed: boolean; color: string; icon: IconName }> = [
-  { name: '公众号 (用户1)', failed: false, color: 'green-logo', icon: 'message' },
-  { name: '小红书 (用户1)', failed: false, color: 'blue-logo', icon: 'document' },
-  { name: '小红书 (用户2)', failed: true, color: 'pink-logo', icon: 'document' }
-]
 
 const accounts = computed<XiaohongshuAccountView[]>(() =>
   xhsAccounts.value.map((account, index) => ({
     ...account,
     active: account.id === activeXhsAccount.value?.id,
+    displayName: getAccountDisplayName(account),
     initial: getAccountInitial(account, index),
-    avatarClass: XHS_AVATAR_CLASSES[index % XHS_AVATAR_CLASSES.length]
+    avatarClass: XHS_AVATAR_CLASSES[index % XHS_AVATAR_CLASSES.length],
+    visibleAvatarUrl: brokenAvatarAccountIds.value.has(account.id) ? '' : account.avatarUrl || ''
   }))
 )
+const loggedInPublishAccounts = computed(() => accounts.value.filter((account) => account.status === 'saved'))
 
 const historyRecords = computed(() => {
   const generated = sessions.value
@@ -926,6 +962,35 @@ function openHistory() {
 
 function closeHistory() {
   router.push(routeByPage.trends)
+}
+
+function normalizePublishTag(value: string) {
+  const text = value.trim().replace(/^[#＃]+/, '').trim()
+  return text ? `#${text}` : ''
+}
+
+function addPublishTag() {
+  const tag = normalizePublishTag(tagInput.value)
+  if (!tag) return
+
+  if (!publishDraft.tags.includes(tag)) {
+    publishDraft.tags.push(tag)
+  }
+  tagInput.value = ''
+}
+
+function removePublishTag(tag: string) {
+  const index = publishDraft.tags.indexOf(tag)
+  if (index >= 0) {
+    publishDraft.tags.splice(index, 1)
+  }
+}
+
+function handlePublishTagEnter(event: KeyboardEvent) {
+  if (event.isComposing) return
+
+  event.preventDefault()
+  addPublishTag()
 }
 
 async function loadXhsAccounts() {
@@ -969,11 +1034,14 @@ function selectXhsAccount(accountId: string) {
   if (!account) return
 
   activeXhsAccountId.value = account.id
-  currentXhsUrl.value = account.lastUrl || XIAOHONGSHU_HOME_URL
+  if (account.status === 'saved' && isXhsLoginUrl(xhsStartUrls[account.id])) {
+    delete xhsStartUrls[account.id]
+  }
+  currentXhsUrl.value = getXhsLaunchUrl(account)
   xhsSessionMessage.value =
     account.status === 'saved'
-      ? `已切换到 ${account.name}，登录态将从独立分区恢复`
-      : `已切换到 ${account.name}，请登录后保存 Cookie 和 session`
+      ? `已切换到 ${getAccountDisplayName(account)}，登录态将从独立分区恢复`
+      : `已切换到 ${getAccountDisplayName(account)}，请登录后保存 Cookie 和 session`
 }
 
 function openXhsLogin() {
@@ -1048,17 +1116,26 @@ async function saveActiveXhsSession(manual = false) {
   xhsAccountLoading.value = true
   try {
     syncCurrentXhsUrl()
-    const [webStorage, title] = await Promise.all([collectXhsWebStorage(webview), readXhsDocumentTitle(webview)])
+    const [webStorage, title, profile] = await Promise.all([
+      collectXhsWebStorage(webview),
+      readXhsDocumentTitle(webview),
+      collectXhsProfile(webview)
+    ])
     const savedAccount = await window.api.xiaohongshuAccounts.saveSession({
       accountId: account.id,
       url: currentXhsUrl.value,
       title,
+      profile,
       webStorage
     })
     updateXhsAccount(savedAccount)
+    if (savedAccount.status === 'saved') {
+      delete xhsStartUrls[savedAccount.id]
+      currentXhsUrl.value = getXhsLaunchUrl(savedAccount)
+    }
     xhsSessionMessage.value =
       savedAccount.status === 'saved'
-        ? `${manual ? '已同步' : '已自动保存'} ${savedAccount.name} 的 Cookie/session`
+        ? `${manual ? '已同步' : '已自动保存'} ${getAccountDisplayName(savedAccount)} 的 Cookie/session`
         : '当前页面还没有可保存的登录态，请完成小红书登录'
   } catch (error) {
     xhsSessionMessage.value = getErrorMessage(error)
@@ -1125,6 +1202,139 @@ async function collectXhsWebStorage(webview: XiaohongshuWebviewElement): Promise
   }
 }
 
+async function collectXhsProfile(webview: XiaohongshuWebviewElement): Promise<XiaohongshuProfileSnapshot> {
+  try {
+    return await webview.executeJavaScript<XiaohongshuProfileSnapshot>(
+      `(() => {
+        const candidates = []
+        const seen = new WeakSet()
+        const nicknameKeyPattern = /nick.?name|nickname|user.?name|display.?name|^name$/i
+        const avatarKeyPattern = /avatar|head.?image|head.?url|profile.?image|image.?url|icon|portrait/i
+
+        const normalizeText = (value) => {
+          if (typeof value !== 'string') return ''
+          return value.replace(/\\s+/g, ' ').trim().slice(0, 32)
+        }
+
+        const normalizeUrl = (value) => {
+          if (typeof value !== 'string') return ''
+          const text = value.trim()
+          if (!text || text.startsWith('data:') || text.startsWith('blob:')) return ''
+          try {
+            const url = new URL(text, window.location.href)
+            return /^https?:$/.test(url.protocol) ? url.href : ''
+          } catch {
+            return ''
+          }
+        }
+
+        const isUsefulNickname = (value) => {
+          const text = normalizeText(value)
+          if (!text || text.length > 32) return false
+          return !/(登录|注册|首页|发布|消息|通知|设置|帮助|创作服务平台|账号管理|小红书号|关注|粉丝|获赞|扫码)/.test(text)
+        }
+
+        const pushCandidate = (candidate, source) => {
+          const nickname = isUsefulNickname(candidate.nickname) ? normalizeText(candidate.nickname) : ''
+          const avatarUrl = normalizeUrl(candidate.avatarUrl)
+          if (nickname || avatarUrl) {
+            candidates.push({ nickname, avatarUrl, source })
+          }
+        }
+
+        const inspectObject = (value, depth = 0) => {
+          if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return
+          seen.add(value)
+
+          let nickname = ''
+          let avatarUrl = ''
+          Object.entries(value).forEach(([key, item]) => {
+            if (typeof item !== 'string') return
+
+            if (!nickname && nicknameKeyPattern.test(key) && isUsefulNickname(item)) {
+              nickname = item
+            }
+
+            if (!avatarUrl && avatarKeyPattern.test(key)) {
+              avatarUrl = normalizeUrl(item)
+            }
+          })
+
+          pushCandidate({ nickname, avatarUrl }, 'storage')
+
+          Object.values(value).forEach((item) => inspectObject(item, depth + 1))
+        }
+
+        const inspectStorage = (storage) => {
+          for (let index = 0; index < storage.length; index += 1) {
+            const key = storage.key(index)
+            const raw = key ? storage.getItem(key) : ''
+            if (!raw || !/^\\s*[{[]/.test(raw)) continue
+
+            try {
+              inspectObject(JSON.parse(raw))
+            } catch {
+              // Ignore unrelated storage entries.
+            }
+          }
+        }
+
+        inspectStorage(window.localStorage)
+        inspectStorage(window.sessionStorage)
+
+        const metaTitle = document.querySelector('meta[property="og:title"], meta[name="og:title"]')?.getAttribute('content')
+        const metaImage = document.querySelector('meta[property="og:image"], meta[name="og:image"]')?.getAttribute('content')
+        pushCandidate({ nickname: metaTitle, avatarUrl: isUsefulNickname(metaTitle) ? metaImage : '' }, 'meta')
+
+        Array.from(document.querySelectorAll('img')).slice(0, 160).forEach((image) => {
+          const avatarUrl = normalizeUrl(image.currentSrc || image.src || image.getAttribute('src') || '')
+          if (!avatarUrl) return
+
+          const imageHint = [
+            image.alt,
+            image.title,
+            image.className,
+            image.getAttribute('aria-label'),
+            avatarUrl
+          ]
+            .filter(Boolean)
+            .join(' ')
+
+          if (!/(avatar|head|profile|user|portrait|face)/i.test(imageHint)) return
+
+          const container = image.closest('[class*="user"], [class*="avatar"], [class*="profile"], [class*="account"], header, button, a, div')
+          const textParts = normalizeText((container && container.textContent) || image.alt || image.title || '')
+            .split(' ')
+            .filter(isUsefulNickname)
+          pushCandidate({ nickname: textParts[0] || image.alt || image.title || '', avatarUrl }, 'dom')
+        })
+
+        const score = (candidate) => {
+          let value = 0
+          if (candidate.nickname) value += 40
+          if (candidate.avatarUrl) value += 50
+          if (candidate.source === 'storage') value += 20
+          if (candidate.source === 'meta') value += 10
+          if (/(avatar|head|profile|xhscdn|xhslink|xiaohongshu|sns)/i.test(candidate.avatarUrl || '')) value += 10
+          return value
+        }
+
+        const best = candidates.sort((left, right) => score(right) - score(left))[0] || {}
+
+        return {
+          nickname: best.nickname || '',
+          avatarUrl: best.avatarUrl || '',
+          capturedAt: Date.now()
+        }
+      })()`
+    )
+  } catch {
+    return {
+      capturedAt: Date.now()
+    }
+  }
+}
+
 async function readXhsDocumentTitle(webview: XiaohongshuWebviewElement): Promise<string> {
   try {
     return await webview.executeJavaScript<string>('document.title || ""')
@@ -1138,7 +1348,16 @@ function getXhsWebview() {
 }
 
 function updateXhsAccount(account: XiaohongshuAccount) {
+  if (account.avatarUrl) {
+    const nextBrokenIds = new Set(brokenAvatarAccountIds.value)
+    nextBrokenIds.delete(account.id)
+    brokenAvatarAccountIds.value = nextBrokenIds
+  }
   xhsAccounts.value = xhsAccounts.value.map((item) => (item.id === account.id ? account : item))
+}
+
+function markAvatarAsBroken(accountId: string) {
+  brokenAvatarAccountIds.value = new Set(brokenAvatarAccountIds.value).add(accountId)
 }
 
 function looksLikeLoggedInXhsUrl(url: string) {
@@ -1150,8 +1369,33 @@ function looksLikeLoggedInXhsUrl(url: string) {
   }
 }
 
+function getXhsLaunchUrl(account: XiaohongshuAccount) {
+  const temporaryUrl = xhsStartUrls[account.id]
+  if (temporaryUrl && (account.status !== 'saved' || !isXhsLoginUrl(temporaryUrl))) {
+    return temporaryUrl
+  }
+  if (account.lastUrl && !isXhsLoginUrl(account.lastUrl)) {
+    return account.lastUrl
+  }
+  return XIAOHONGSHU_HOME_URL
+}
+
+function isXhsLoginUrl(url?: string) {
+  if (!url) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname.endsWith('xiaohongshu.com') && parsed.pathname.includes('/login')
+  } catch {
+    return url.includes('/login')
+  }
+}
+
+function getAccountDisplayName(account: XiaohongshuAccount) {
+  return account.nickname?.trim() || account.name
+}
+
 function getAccountInitial(account: XiaohongshuAccount, index: number) {
-  const name = account.name.replace(/^小红书账号\s*/u, '').trim()
+  const name = getAccountDisplayName(account).replace(/^小红书账号\s*/u, '').trim()
   return (name[0] || `${index + 1}`).slice(0, 1)
 }
 
@@ -1356,6 +1600,21 @@ watch(headerTitle, (title) => {
   document.title = `${title} - MDT Marketing`
 })
 
+watch(
+  loggedInPublishAccounts,
+  (publishAccounts) => {
+    const availableAccountIds = new Set(publishAccounts.map((account) => account.id))
+    const selectedAccountIds = publishDraft.platforms.filter((accountId) => availableAccountIds.has(accountId))
+
+    if (!selectedAccountIds.length && publishAccounts.length) {
+      selectedAccountIds.push(publishAccounts[0].id)
+    }
+
+    publishDraft.platforms.splice(0, publishDraft.platforms.length, ...selectedAccountIds)
+  },
+  { immediate: true }
+)
+
 onMounted(() => {
   document.title = `${headerTitle.value} - MDT Marketing`
   void loadXhsAccounts()
@@ -1473,7 +1732,7 @@ onBeforeUnmount(() => {
 .account-actions button,
 .primary-lite,
 .publish-action,
-.editor-toolbar button,
+.tag-remove-button,
 .footer-history,
 .download-report,
 .history-record {
@@ -2305,64 +2564,50 @@ onBeforeUnmount(() => {
   padding: 30px;
 }
 
-.tag-row button {
+.tag-pill {
+  display: inline-flex;
   min-height: 32px;
-  border: 0;
+  align-items: center;
+  gap: 6px;
   border-radius: 999px;
-  background: #d3e2ed;
-  color: #56656e;
-  cursor: pointer;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
   font-weight: 700;
   padding: 4px 12px;
 }
 
-.tag-row button:first-child {
-  background: var(--primary);
-  color: #ffffff;
+.tag-pill .tag-text {
+  color: inherit;
+  font-size: 15px;
+  font-weight: inherit;
+  line-height: 20px;
+}
+
+.tag-remove-button {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+}
+
+.tag-remove-button:hover {
+  background: rgba(0, 88, 190, 0.12);
 }
 
 .editor-card {
   display: grid;
-  grid-template-rows: 86px minmax(520px, 1fr);
+  grid-template-rows: minmax(520px, 1fr);
   min-height: 810px;
   overflow: hidden;
   padding: 0;
-}
-
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  border-bottom: 1px solid var(--outline);
-  background: var(--surface-low);
-  padding: 0 30px;
-}
-
-.editor-toolbar button {
-  min-width: 28px;
-  border-radius: 6px;
-  background: transparent;
-  color: #30363d;
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.editor-toolbar span {
-  width: 1px;
-  height: 26px;
-  background: var(--outline);
-}
-
-.editor-toolbar .ai-button {
-  display: inline-flex;
-  min-width: 150px;
-  min-height: 50px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-left: auto;
-  background: #00771f;
-  color: #ffffff;
 }
 
 .editor-card textarea {
@@ -2407,30 +2652,66 @@ onBeforeUnmount(() => {
   padding: 12px 16px;
 }
 
-.publish-platform-list label.failed {
-  border-color: #f3b4b4;
-  background: #fff6f5;
+.publish-platform-list label.checked {
+  border-color: var(--primary);
+  background: #f0f6ff;
 }
 
-.platform-logo {
+.publish-account-avatar {
+  position: relative;
   display: grid;
   width: 40px;
   height: 40px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 50%;
   color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: visible;
 }
 
-.green-logo {
-  background: #22c55e;
+.publish-account-avatar img,
+.publish-account-avatar .account-avatar-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border-radius: inherit;
 }
 
-.blue-logo {
-  background: #0058be;
+.publish-account-avatar img {
+  object-fit: cover;
+  background: #e5edf7;
 }
 
-.pink-logo {
-  background: #f77f9a;
+.publish-account-avatar.avatar-forest .account-avatar-fallback {
+  background:
+    radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.85), transparent 24%),
+    linear-gradient(135deg, #263238, #5c8d6b 48%, #c7d69b);
+}
+
+.publish-account-avatar.avatar-sea .account-avatar-fallback {
+  background:
+    radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.85), transparent 24%),
+    linear-gradient(135deg, #1d3557, #4895ef 48%, #cfe8ff);
+}
+
+.publish-account-avatar i {
+  position: absolute;
+  right: -6px;
+  bottom: -2px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #ef1f35;
+  color: #ffffff;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .publish-platform-list strong,
@@ -2445,8 +2726,14 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.publish-platform-list label.failed em {
-  color: var(--error);
+.publish-platform-empty {
+  margin: 0;
+  border: 1px dashed var(--outline);
+  border-radius: 8px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 22px;
+  padding: 18px 16px;
 }
 
 .publish-action {
@@ -2564,24 +2851,33 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-.account-avatar span {
+.account-avatar img,
+.account-avatar-fallback {
   display: grid;
   width: 100%;
   height: 100%;
   place-items: center;
   border-radius: inherit;
+}
+
+.account-avatar img {
+  object-fit: cover;
+  background: #e5edf7;
+}
+
+.account-avatar-fallback {
   background:
     radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.9), transparent 24%),
     linear-gradient(135deg, #234f7e, #9fc5e8 48%, #f7d48f);
 }
 
-.account-avatar.avatar-forest span {
+.account-avatar.avatar-forest .account-avatar-fallback {
   background:
     radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.85), transparent 24%),
     linear-gradient(135deg, #263238, #5c8d6b 48%, #c7d69b);
 }
 
-.account-avatar.avatar-sea span {
+.account-avatar.avatar-sea .account-avatar-fallback {
   background:
     radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.85), transparent 24%),
     linear-gradient(135deg, #1d3557, #4895ef 48%, #cfe8ff);

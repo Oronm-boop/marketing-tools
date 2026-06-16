@@ -1,17 +1,46 @@
 export const AppRoutes = [
-    { 
-        path: "/", 
-        name:'AI营销工具',
-        component: ()=>import('@views/AgentTools.vue') 
+    {
+        path: "/",
+        redirect: "/trends"
     },
-    { 
-        path: "/home", 
-        name:'首页',
-        component: ()=>import('@views/Home.vue') 
+    {
+        path: "/trends",
+        name:'热点分析',
+        meta: { page: 'trends' },
+        component: ()=>import('@views/MarketingSuite.vue')
     },
-    { 
-        path: "/about", 
-        name:'关于我们',
-        component: ()=>import('@views/About.vue') 
+    {
+        path: "/seo",
+        name:'SEO关键词',
+        meta: { page: 'seo' },
+        component: ()=>import('@views/MarketingSuite.vue')
+    },
+    {
+        path: "/copywriting",
+        name:'宣传文案工具',
+        meta: { page: 'copywriting' },
+        component: ()=>import('@views/MarketingSuite.vue')
+    },
+    {
+        path: "/publish",
+        name:'发布中心',
+        meta: { page: 'publish' },
+        component: ()=>import('@views/MarketingSuite.vue')
+    },
+    {
+        path: "/accounts",
+        name:'账号管理',
+        meta: { page: 'accounts' },
+        component: ()=>import('@views/MarketingSuite.vue')
+    },
+    {
+        path: "/accounts/login",
+        redirect: "/accounts"
+    },
+    {
+        path: "/history",
+        name:'历史记录',
+        meta: { page: 'history' },
+        component: ()=>import('@views/MarketingSuite.vue')
     }
 ]

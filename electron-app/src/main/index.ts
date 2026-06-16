@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { startBackend, stopBackend } from './backend'
 import { verifyLicense } from './license'
+import { registerXiaohongshuAccountIpc } from './xiaohongshuAccounts'
 
 const PREFERRED_WINDOW_WIDTH = 1280
 const PREFERRED_WINDOW_HEIGHT = 800
@@ -25,7 +26,8 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webviewTag: true
     }
   })
 
@@ -70,16 +72,21 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  const licenseResult = await verifyLicense()
-  if (!licenseResult.ok) {
-    const reason = licenseResult.reason ?? '未知原因'
-    const logHint = licenseResult.logFile ? `\n\n日志位置：${licenseResult.logFile}` : ''
-    console.error(`[license] 授权校验失败: ${reason}`)
-    dialog.showErrorBox('License 验证失败', `未检测到有效授权，应用将退出。\n\n原因：${reason}${logHint}`)
-    app.exit(1)
-    return
+  if (is.dev) {
+    console.info('[license] development mode detected, skipping license validation')
+  } else {
+    const licenseResult = await verifyLicense()
+    if (!licenseResult.ok) {
+      const reason = licenseResult.reason ?? '未知原因'
+      const logHint = licenseResult.logFile ? `\n\n日志位置：${licenseResult.logFile}` : ''
+      console.error(`[license] 授权校验失败: ${reason}`)
+      dialog.showErrorBox('License 验证失败', `未检测到有效授权，应用将退出。\n\n原因：${reason}${logHint}`)
+      app.exit(1)
+      return
+    }
   }
 
+  registerXiaohongshuAccountIpc()
   await startBackend()
   createWindow()
 

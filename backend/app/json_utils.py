@@ -19,6 +19,12 @@ def extract_json_payload(text: str) -> Any:
             try:
                 return json.loads(candidate)
             except json.JSONDecodeError:
+                repaired = _escape_unquoted_string_quotes(candidate)
+                if repaired != candidate:
+                    try:
+                        return json.loads(repaired)
+                    except json.JSONDecodeError:
+                        continue
                 continue
 
     raise JSONExtractionError("模型返回内容不是有效 JSON")
@@ -126,3 +132,46 @@ def _balanced_blocks(text: str, opener: str, closer: str) -> list[str]:
                 start = None
 
     return blocks
+
+
+def _escape_unquoted_string_quotes(text: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escape = False
+
+    for index, char in enumerate(text):
+        if not in_string:
+            result.append(char)
+            if char == '"':
+                in_string = True
+            continue
+
+        if escape:
+            result.append(char)
+            escape = False
+            continue
+
+        if char == "\\":
+            result.append(char)
+            escape = True
+            continue
+
+        if char == '"':
+            next_char = _next_non_whitespace(text, index + 1)
+            if next_char in {":", ",", "}", "]", None}:
+                result.append(char)
+                in_string = False
+            else:
+                result.append('\\"')
+            continue
+
+        result.append(char)
+
+    return "".join(result)
+
+
+def _next_non_whitespace(text: str, start: int) -> str | None:
+    for char in text[start:]:
+        if not char.isspace():
+            return char
+    return None

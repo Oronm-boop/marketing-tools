@@ -5,15 +5,30 @@ from pydantic import TypeAdapter, ValidationError
 from .config import Settings
 from .json_utils import JSONExtractionError, extract_json_payload
 from .local_model_client import LocalModelClient, LocalModelClientError, build_chat_messages
-from .prompts import SYSTEM_PROMPT, build_copywriting_user_prompt, build_seo_user_prompt
+from .prompts import (
+    SYSTEM_PROMPT,
+    build_copywriting_user_prompt,
+    build_publish_image_prompts_user_prompt,
+    build_seo_user_prompt,
+)
 from .qwen_client import QwenClient, QwenClientError
 from .schemas import (
     CopywritingItem,
     CopywritingRequest,
     CopywritingResponse,
+    PublishImagePromptItem,
+    PublishImagePromptRequest,
+    PublishImagePromptResponse,
     SeoKeywordItem,
     SeoKeywordRequest,
     SeoKeywordResponse,
+)
+from .web_search import (
+    TavilySearchClient,
+    WebSearchError,
+    build_copywriting_search_query,
+    build_seo_search_query,
+    format_web_context,
 )
 
 
@@ -34,6 +49,7 @@ class GenerationService:
             self.client = QwenClient(settings)
         else:
             self.client = LocalModelClient(settings)
+        self.search_client = TavilySearchClient(settings)
 
     @property
     def model_name(self) -> str:
@@ -45,8 +61,9 @@ class GenerationService:
         return self.settings.local_model_name
 
     async def generate_seo_keywords(self, payload: SeoKeywordRequest) -> SeoKeywordResponse:
+        web_context = await self._search_web_context(build_seo_search_query(payload))
         content = await self._call_model(
-            build_seo_user_prompt(payload),
+            build_seo_user_prompt(payload, web_context),
             temperature=0.6,
             max_tokens=2048,
         )
@@ -62,8 +79,9 @@ class GenerationService:
     async def generate_copywriting(self, payload: CopywritingRequest) -> CopywritingResponse:
         target_count = max(payload.article_count, len(payload.platform_styles))
         allowed_platforms = set(payload.platform_styles)
+        web_context = await self._search_web_context(build_copywriting_search_query(payload))
         content = await self._call_model(
-            build_copywriting_user_prompt(payload),
+            build_copywriting_user_prompt(payload, web_context),
             temperature=0.5,
             max_tokens=min(12000, max(2048, 2048 + target_count * 1600)),
         )
@@ -92,6 +110,34 @@ class GenerationService:
             )
 
         return CopywritingResponse(items=items[:target_count], model=self.model_name)
+
+    async def generate_publish_image_prompts(
+        self,
+        payload: PublishImagePromptRequest,
+    ) -> PublishImagePromptResponse:
+        content = await self._call_model(
+            build_publish_image_prompts_user_prompt(payload),
+            temperature=0.45,
+            max_tokens=4096,
+        )
+        raw_items = _extract_items(content, label="发布配图描述词")
+
+        try:
+            items = TypeAdapter(list[PublishImagePromptItem]).validate_python(raw_items)
+        except ValidationError as exc:
+            raise GenerationServiceError(f"发布配图描述词 JSON 字段校验失败：{exc}") from exc
+
+        if len(items) < 3:
+            raise GenerationServiceError(f"发布配图描述词数量不足：期望 3 条，实际 {len(items)} 条")
+
+        return PublishImagePromptResponse(items=items[:3], model=self.model_name)
+
+    async def _search_web_context(self, query: str) -> str:
+        try:
+            results = await self.search_client.search(query)
+        except WebSearchError as exc:
+            raise GenerationServiceError(str(exc)) from exc
+        return format_web_context(query, results)
 
     async def _call_model(
         self,

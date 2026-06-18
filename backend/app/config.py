@@ -1,8 +1,9 @@
 import sys
 from functools import lru_cache
+from os import getenv
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,13 @@ if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).resolve().parent
 else:
     BASE_DIR = Path(__file__).resolve().parents[1]
+
+
+def default_generated_image_cache_dir() -> Path:
+    local_app_data = getenv("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "MDT Marketing" / "generated-images"
+    return Path.home() / ".mdt-marketing" / "generated-images"
 
 
 class Settings(BaseSettings):
@@ -31,6 +39,19 @@ class Settings(BaseSettings):
     qwen_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     qwen_model: str = "qwen-plus"
     qwen_enable_thinking: bool = False
+
+    # Tavily 联网搜索（SEO 关键词和宣传文案生成前注入上下文）
+    tavily_api_key: SecretStr | None = None
+    tavily_base_url: str = "https://api.tavily.com"
+    tavily_search_depth: str = "basic"
+    tavily_max_results: int = Field(default=5, ge=1, le=10)
+    tavily_timeout_seconds: float = Field(default=30, gt=0)
+
+    # ComfyUI 文生图服务
+    comfyui_base_url: str = "http://192.168.0.122:8188"
+    comfyui_timeout_seconds: float = Field(default=600, gt=0)
+    generated_image_cache_dir: Path = Field(default_factory=default_generated_image_cache_dir)
+    generated_image_cache_max_age_seconds: int = Field(default=31536000, gt=0)
 
     request_timeout_seconds: float = 300
     cors_allow_origins: str = (

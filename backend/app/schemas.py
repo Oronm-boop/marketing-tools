@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AliasChoices,
@@ -107,6 +107,59 @@ class CopywritingItem(BaseModel):
 class CopywritingResponse(BaseModel):
     items: list[CopywritingItem]
     model: str
+
+
+class PublishImagePromptRequest(BaseModel):
+    title: NonEmptyString
+    content: NonEmptyString
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)[:10]
+
+
+class PublishImagePromptItem(BaseModel):
+    title: str = ""
+    description: NonEmptyString
+    keywords: list[str] = Field(default_factory=list)
+
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)[:8]
+
+
+class PublishImagePromptResponse(BaseModel):
+    items: list[PublishImagePromptItem]
+    model: str
+
+
+class ImageGenerationRequest(BaseModel):
+    prompt: NonEmptyString
+    width: int = Field(default=1920, ge=256, le=4096)
+    height: int = Field(default=1080, ge=256, le=4096)
+    batch_size: int = Field(default=1, ge=1, le=4)
+
+
+class ImageGenerationTaskResponse(BaseModel):
+    prompt_id: NonEmptyString
+    status: Literal["queued"] = "queued"
+
+
+class GeneratedImageFile(BaseModel):
+    filename: NonEmptyString
+    subfolder: str = ""
+    type: str = "output"
+    url: str = ""
+
+
+class ImageGenerationStatusResponse(BaseModel):
+    prompt_id: NonEmptyString
+    status: Literal["pending", "running", "success", "failed"]
+    message: str = ""
+    image: GeneratedImageFile | None = None
 
 
 class ProviderErrorResponse(BaseModel):

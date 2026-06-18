@@ -8,7 +8,6 @@ const STORE_FILE_NAME = 'xiaohongshu-accounts.json'
 const STORE_VERSION = 1
 const DEFAULT_ACCOUNT_ID = 'xhs-default'
 const DEFAULT_PARTITION = 'persist:xiaohongshu'
-
 type XhsAccountStatus = 'pending' | 'saved'
 
 type WebStorageSnapshot = {
@@ -46,6 +45,7 @@ type XhsAccountRecord = {
 
 type XhsAccountPublic = Omit<XhsAccountRecord, 'encryptedCookies' | 'encryptedWebStorage'>
 
+
 type XhsAccountStore = {
   version: number
   accounts: XhsAccountRecord[]
@@ -67,6 +67,7 @@ type XhsProfileSnapshot = {
   nickname?: string
   avatarUrl?: string
   capturedAt?: number
+  isLoggedIn?: boolean
 }
 
 export function registerXiaohongshuAccountIpc(): void {
@@ -97,6 +98,25 @@ export function registerXiaohongshuAccountIpc(): void {
     return toPublicAccount(account)
   })
 
+  ipcMain.handle('xhs-accounts:delete', async (_event, accountId: string) => {
+    const normalizedAccountId = typeof accountId === 'string' ? accountId.trim() : ''
+    if (!normalizedAccountId) {
+      throw new Error('缺少小红书账号 ID')
+    }
+
+    const store = await readAccountStore()
+    const accountIndex = store.accounts.findIndex((item) => item.id === normalizedAccountId)
+    if (accountIndex < 0) {
+      throw new Error('未找到小红书账号')
+    }
+
+    const [account] = store.accounts.splice(accountIndex, 1)
+    await clearAccountSessionData(account.partition)
+    await writeAccountStore(store)
+
+    return store.accounts.map(toPublicAccount)
+  })
+
   ipcMain.handle('xhs-accounts:save-session', async (_event, payload: SaveSessionPayload) => {
     if (!payload?.accountId) {
       throw new Error('缺少小红书账号 ID')
@@ -123,20 +143,34 @@ export function registerXiaohongshuAccountIpc(): void {
     account.cookieCount = xhsCookies.length
     account.localStorageCount = webStorage ? Object.keys(webStorage.localStorage).length : account.localStorageCount
     account.sessionStorageCount = webStorage ? Object.keys(webStorage.sessionStorage).length : account.sessionStorageCount
-    account.status = xhsCookies.length > 0 || account.localStorageCount > 0 || account.sessionStorageCount > 0 ? 'saved' : 'pending'
+    account.status = isLikelyLoggedInSession({
+      cookieCount: xhsCookies.length,
+      localStorageCount: account.localStorageCount,
+      sessionStorageCount: account.sessionStorageCount,
+      url: account.lastUrl,
+      profile
+    })
+      ? 'saved'
+      : 'pending'
 
     if (account.status === 'saved') {
       account.lastLoginAt = now
+    } else {
+      account.lastLoginAt = undefined
     }
 
     if (payload.title) {
       account.name = deriveAccountName(account.name, payload.title)
     }
 
-    if (profile) {
+    if (profile && account.status === 'saved') {
       account.nickname = profile.nickname || account.nickname
       account.avatarUrl = profile.avatarUrl || account.avatarUrl
       account.profileCapturedAt = profile.capturedAt
+    } else if (account.status === 'pending') {
+      account.nickname = undefined
+      account.avatarUrl = undefined
+      account.profileCapturedAt = undefined
     }
 
     account.encryptedCookies = protectString(JSON.stringify(xhsCookies.map(serializeCookie)))
@@ -164,14 +198,16 @@ export function registerXiaohongshuAccountIpc(): void {
   })
 }
 
+
+
 async function readAccountStore(): Promise<XhsAccountStore> {
   try {
     const raw = await readFile(getStorePath(), 'utf8')
     const parsed = JSON.parse(raw) as Partial<XhsAccountStore>
-    return ensureDefaultAccount({
+    return {
       version: STORE_VERSION,
       accounts: Array.isArray(parsed.accounts) ? parsed.accounts.map(normalizeAccountRecord).filter(isAccountRecord) : []
-    })
+    }
   } catch {
     const store = ensureDefaultAccount({ version: STORE_VERSION, accounts: [] })
     await writeAccountStore(store)
@@ -210,6 +246,7 @@ function normalizeAccountRecord(record: Partial<XhsAccountRecord>): XhsAccountRe
   const now = Date.now()
   const nickname = normalizeAccountName(record.nickname)
   const avatarUrl = normalizeAvatarUrl(record.avatarUrl)
+  const status = record.status === 'saved' && isLikelyStoredLogin(record) ? 'saved' : 'pending'
 
   return {
     id: String(record.id),
@@ -219,10 +256,10 @@ function normalizeAccountRecord(record: Partial<XhsAccountRecord>): XhsAccountRe
     avatarUrl: avatarUrl || undefined,
     profileCapturedAt: Number(record.profileCapturedAt) || undefined,
     partition: String(record.partition),
-    status: record.status === 'saved' ? 'saved' : 'pending',
+    status,
     createdAt: Number(record.createdAt) || now,
     updatedAt: Number(record.updatedAt) || now,
-    lastLoginAt: Number(record.lastLoginAt) || undefined,
+    lastLoginAt: status === 'saved' ? Number(record.lastLoginAt) || undefined : undefined,
     lastSessionSaveAt: Number(record.lastSessionSaveAt) || undefined,
     lastUrl: typeof record.lastUrl === 'string' ? record.lastUrl : undefined,
     cookieCount: Number(record.cookieCount) || 0,
@@ -257,12 +294,42 @@ function normalizeProfile(profile?: XhsProfileSnapshot): XhsProfileSnapshot | nu
 
   const nickname = normalizeAccountName(profile.nickname)
   const avatarUrl = normalizeAvatarUrl(profile.avatarUrl)
-  if (!nickname && !avatarUrl) return null
+  const isLoggedIn = Boolean(profile.isLoggedIn)
+  if (!isLoggedIn && !nickname && !avatarUrl) return null
 
   return {
     nickname,
     avatarUrl,
-    capturedAt: Number(profile.capturedAt) || Date.now()
+    capturedAt: Number(profile.capturedAt) || Date.now(),
+    isLoggedIn
+  }
+}
+
+function isLikelyLoggedInSession(payload: {
+  cookieCount: number
+  localStorageCount: number
+  sessionStorageCount: number
+  url?: string
+  profile: XhsProfileSnapshot | null
+}): boolean {
+  if (isXhsLoginUrl(payload.url)) return false
+  if (payload.cookieCount <= 0 && payload.localStorageCount <= 0 && payload.sessionStorageCount <= 0) return false
+  return Boolean(payload.profile?.isLoggedIn)
+}
+
+function isLikelyStoredLogin(record: Partial<XhsAccountRecord>): boolean {
+  if (isXhsLoginUrl(record.lastUrl)) return false
+  return Boolean(record.nickname || record.avatarUrl || record.profileCapturedAt)
+}
+
+function isXhsLoginUrl(url?: string): boolean {
+  if (!url) return false
+
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname.endsWith('xiaohongshu.com') && parsed.pathname.includes('/login')
+  } catch {
+    return url.includes('/login')
   }
 }
 
@@ -343,4 +410,11 @@ async function flushStorageData(accountSession: Electron.Session): Promise<void>
   if (flushableSession.flushStorageData) {
     await Promise.resolve(flushableSession.flushStorageData())
   }
+}
+
+async function clearAccountSessionData(partition: string): Promise<void> {
+  const accountSession = session.fromPartition(partition)
+  await accountSession.clearStorageData()
+  await accountSession.clearCache()
+  await flushStorageData(accountSession)
 }

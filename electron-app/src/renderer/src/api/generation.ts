@@ -38,6 +38,49 @@ export type CopywritingResponse = {
   model: string
 }
 
+export type PublishImagePromptPayload = {
+  title: string
+  content: string
+  tags: string[]
+}
+
+export type PublishImagePromptItem = {
+  title: string
+  description: string
+  keywords: string[]
+}
+
+export type PublishImagePromptResponse = {
+  items: PublishImagePromptItem[]
+  model: string
+}
+
+export type ImageGenerationPayload = {
+  prompt: string
+  width?: number
+  height?: number
+  batch_size?: number
+}
+
+export type ImageGenerationTaskResponse = {
+  prompt_id: string
+  status: 'queued'
+}
+
+export type GeneratedImageFile = {
+  filename: string
+  subfolder: string
+  type: string
+  url: string
+}
+
+export type ImageGenerationStatusResponse = {
+  prompt_id: string
+  status: 'pending' | 'running' | 'success' | 'failed'
+  message: string
+  image: GeneratedImageFile | null
+}
+
 export const generateSeoKeywords = (data: SeoKeywordPayload) => {
   return request({
     url: '/seo-keywords',
@@ -52,4 +95,27 @@ export const generateCopywriting = (data: CopywritingPayload) => {
     method: 'post',
     data
   }) as unknown as Promise<CopywritingResponse>
+}
+
+export const generatePublishImagePrompts = (data: PublishImagePromptPayload) => {
+  return request({
+    url: '/image-generation/prompts',
+    method: 'post',
+    data
+  }) as unknown as Promise<PublishImagePromptResponse>
+}
+
+export const createImageGenerationTask = (data: ImageGenerationPayload) => {
+  return request({
+    url: '/image-generation/tasks',
+    method: 'post',
+    data
+  }) as unknown as Promise<ImageGenerationTaskResponse>
+}
+
+export const getImageGenerationTask = (promptId: string) => {
+  return request({
+    url: `/image-generation/tasks/${encodeURIComponent(promptId)}`,
+    method: 'get'
+  }) as unknown as Promise<ImageGenerationStatusResponse>
 }

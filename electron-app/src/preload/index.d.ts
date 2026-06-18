@@ -32,11 +32,13 @@ type XiaohongshuProfileSnapshot = {
   nickname?: string
   avatarUrl?: string
   capturedAt?: number
+  isLoggedIn?: boolean
 }
 
 type XiaohongshuAccountsAPI = {
   list: () => Promise<XiaohongshuAccount[]>
   create: (payload?: { name?: string }) => Promise<XiaohongshuAccount>
+  delete: (accountId: string) => Promise<XiaohongshuAccount[]>
   saveSession: (payload: {
     accountId: string
     url?: string
@@ -47,11 +49,31 @@ type XiaohongshuAccountsAPI = {
   getWebStorage: (accountId: string) => Promise<XiaohongshuWebStorageSnapshot | null>
 }
 
+type XiaohongshuPublishImageTextPayload = {
+  accountId: string
+  title: string
+  content: string
+  tags: string[]
+  imageUrls: string[]
+}
+
+type XiaohongshuPublishResult = {
+  status: 'published' | 'failed'
+  message?: string
+}
+
+type XiaohongshuPublisherAPI = {
+  publishImageText: (payload: XiaohongshuPublishImageTextPayload) => Promise<XiaohongshuPublishResult>
+}
+
+
+
 declare global {
   interface Window {
     electron: ElectronAPI
     api: {
       xiaohongshuAccounts: XiaohongshuAccountsAPI
+      xiaohongshuPublisher: XiaohongshuPublisherAPI
     }
   }
 }

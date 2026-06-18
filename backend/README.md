@@ -56,6 +56,25 @@ LOCAL_MODEL_NAME=Qwen3.6-35B-A3B-UD-Q8_K_XL
 LOCAL_MODEL_MAX_TOKENS=2048
 LOCAL_MODEL_TOP_P=0.9
 REQUEST_TIMEOUT_SECONDS=300
+TAVILY_API_KEY=你的 Tavily API Key
+TAVILY_BASE_URL=https://api.tavily.com
+TAVILY_SEARCH_DEPTH=basic
+TAVILY_MAX_RESULTS=5
+TAVILY_TIMEOUT_SECONDS=30
+COMFYUI_TIMEOUT_SECONDS=600
+GENERATED_IMAGE_CACHE_MAX_AGE_SECONDS=31536000
+```
+
+生成图片第一次预览时会缓存到用户本机，后续同一张图优先读取本机缓存，并通过浏览器强缓存减少发布中心重复下载。Windows 默认目录：
+
+```text
+%LOCALAPPDATA%\MDT Marketing\generated-images
+```
+
+如需自定义目录，可在 `.env` 设置：
+
+```text
+GENERATED_IMAGE_CACHE_DIR=D:\path\to\generated-images
 ```
 
 后端会调用本地 OpenAI-compatible Chat 接口：

@@ -12,3 +12,8 @@ def test_extract_json_payload_from_thinking_and_array():
 
     assert payload == [{"keyword": "长尾词"}]
 
+
+def test_extract_json_payload_repairs_unescaped_quotes_in_string_value():
+    payload = extract_json_payload('{"items":[{"content":"最惊喜的是它的“物理 AI"属性。"}]}')
+
+    assert payload == {"items": [{"content": '最惊喜的是它的“物理 AI"属性。'}]}

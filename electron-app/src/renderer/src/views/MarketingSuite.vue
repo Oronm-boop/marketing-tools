@@ -321,7 +321,7 @@
               <article v-for="(item, index) in displayedCopyResults" :key="`${item.title}-${index}`" class="copy-output">
                 <div class="copy-output-head">
                   <h2>{{ item.title || `生成${index + 1}` }}</h2>
-                  <button class="publish-mini" type="button">
+                  <button class="publish-mini" type="button" @click="preparePublishFromCopy(item)">
                     <IconGlyph name="upload" />
                     <span>发布</span>
                   </button>
@@ -337,7 +337,12 @@
             <article class="title-card">
               <label class="input-field">
                 <span>标题</span>
-                <input v-model="publishDraft.title" type="text" placeholder="输入文章标题..." />
+                <input
+                  v-model="publishDraft.title"
+                  :disabled="publishLoading"
+                  type="text"
+                  placeholder="输入文章标题..."
+                />
               </label>
               <div class="input-field tag-field">
                 <span>标签</span>
@@ -356,6 +361,7 @@
                 </div>
                 <input
                   v-model="tagInput"
+                  :disabled="publishLoading"
                   type="text"
                   placeholder="添加新标签，按回车确认..."
                   @keydown.enter="handlePublishTagEnter"
@@ -363,8 +369,52 @@
               </div>
             </article>
 
+            <article class="image-upload-card">
+              <div class="publish-image-head">
+                <span>图片</span>
+              </div>
+              <div class="publish-image-slots" aria-label="生成图片">
+                <figure
+                  v-for="slot in publishImageSlots"
+                  :key="slot.id"
+                  class="publish-image-slot"
+                  :class="`status-${slot.status}`"
+                >
+                  <div class="publish-image-preview">
+                    <img v-if="slot.status === 'ready' && slot.imageUrl" :src="slot.imageUrl" :alt="slot.name" />
+                    <div v-else-if="slot.status === 'generating'" class="publish-image-skeleton" aria-hidden="true">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div v-else class="publish-image-placeholder">
+                      <IconGlyph name="image" />
+                      <strong>图片 {{ slot.index + 1 }}</strong>
+                    </div>
+                  </div>
+                  <figcaption>
+                    <div class="publish-image-meta">
+                      <strong>{{ getPublishImageSlotTitle(slot) }}</strong>
+                      <span v-if="slot.status === 'generating' && slot.promptId">任务 {{ slot.promptId.slice(0, 8) }}</span>
+                      <span v-else>{{ getPublishImageSlotKeywordText(slot.index) }}</span>
+                    </div>
+                    <button
+                      class="ghost-button compact generate-image-button"
+                      :disabled="publishLoading || publishImagePromptLoading || slot.status === 'generating'"
+                      type="button"
+                      @click="generatePublishImage(slot.index)"
+                    >
+                      <IconGlyph :name="slot.status === 'ready' ? 'refresh' : 'spark'" />
+                      <span>{{ getGenerateButtonText(slot) }}</span>
+                    </button>
+                  </figcaption>
+                  <p v-if="slot.status === 'failed'" class="publish-image-slot-error">{{ slot.error }}</p>
+                </figure>
+              </div>
+            </article>
+
             <article class="editor-card">
-              <textarea v-model="publishDraft.content" placeholder="在此输入正文"></textarea>
+              <textarea v-model="publishDraft.content" :disabled="publishLoading" placeholder="在此输入正文"></textarea>
             </article>
           </section>
 
@@ -377,11 +427,11 @@
               <fieldset class="radio-row">
                 <legend>发布时间</legend>
                 <label>
-                  <input v-model="publishDraft.schedule" type="radio" value="now" />
+                  <input v-model="publishDraft.schedule" :disabled="publishLoading" type="radio" value="now" />
                   <span>立即发布</span>
                 </label>
                 <label>
-                  <input v-model="publishDraft.schedule" type="radio" value="later" />
+                  <input v-model="publishDraft.schedule" :disabled="publishLoading" type="radio" value="later" />
                   <span>定时发布</span>
                 </label>
               </fieldset>
@@ -407,7 +457,7 @@
                     <strong>{{ account.displayName }}</strong>
                     <em>小红书 · 已连接</em>
                   </span>
-                  <input v-model="publishDraft.platforms" :value="account.id" type="checkbox" />
+                  <input v-model="publishDraft.platforms" :disabled="publishLoading" :value="account.id" type="checkbox" />
                 </label>
                 <p v-if="!loggedInPublishAccounts.length" class="publish-platform-empty">
                   暂无已登录的小红书账号
@@ -415,25 +465,13 @@
               </fieldset>
             </article>
 
-            <button class="publish-action" type="button">
-              <IconGlyph name="send" />
-              <span>(Publish)</span>
-            </button>
+            <p v-if="publishError" class="error-text publish-error">{{ publishError }}</p>
+            <p v-if="publishSuccess" class="success-text publish-error">{{ publishSuccess }}</p>
 
-            <article class="publish-alert">
-              <IconGlyph name="alert" />
-              <div>
-                <h3>发布失败</h3>
-                <p>部分账号需重新登录验证</p>
-                <div>
-                  <button type="button">查看详情</button>
-                  <button type="button">
-                    <IconGlyph name="refresh" />
-                    <span>重新发布</span>
-                  </button>
-                </div>
-              </div>
-            </article>
+            <button class="publish-action" :disabled="publishLoading" type="button" @click="submitPublish">
+              <IconGlyph name="send" />
+              <span>{{ publishLoading ? '发布中...' : '一键发布小红书' }}</span>
+            </button>
           </aside>
         </section>
 
@@ -468,6 +506,10 @@
             <button class="primary-lite" type="button" :disabled="xhsAccountLoading || !activeXhsAccount" @click="saveActiveXhsSession(true)">同步账号</button>
             <button type="button">账号管理</button>
             <button type="button">账号分组</button>
+            <button class="danger-lite" type="button" :disabled="xhsAccountLoading || !activeXhsAccount" @click="deleteActiveXhsAccount">
+              <IconGlyph name="trash" />
+              <span>删除账号</span>
+            </button>
             <button type="button" :disabled="!activeXhsAccount" @click="openXhsLogin">一键重新登录</button>
           </div>
 
@@ -509,7 +551,7 @@
                 @did-navigate="handleXhsLoadState"
                 @did-navigate-in-page="handleXhsLoadState"
               ></webview>
-              <div v-else class="xiaohongshu-webview-empty">正在准备小红书账号环境...</div>
+              <div v-else class="xiaohongshu-webview-empty">暂无小红书账号，请先添加账号</div>
             </div>
           </article>
         </section>
@@ -549,9 +591,14 @@ import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, rea
 import { useRoute, useRouter } from 'vue-router'
 import SettingsDialog from '@components/SettingsDialog.vue'
 import {
+  createImageGenerationTask,
   generateCopywriting,
+  generatePublishImagePrompts,
   generateSeoKeywords,
+  getImageGenerationTask,
   type CopywritingItem,
+  type ImageGenerationStatusResponse,
+  type PublishImagePromptItem,
   type SeoKeywordItem
 } from '@api/generation'
 
@@ -587,6 +634,7 @@ type IconName =
   | 'settings'
   | 'spark'
   | 'trend'
+  | 'trash'
   | 'upload'
   | 'user'
 
@@ -669,6 +717,7 @@ type XiaohongshuProfileSnapshot = {
   nickname?: string
   avatarUrl?: string
   capturedAt?: number
+  isLoggedIn?: boolean
 }
 
 type XiaohongshuAccountView = XiaohongshuAccount & {
@@ -677,6 +726,27 @@ type XiaohongshuAccountView = XiaohongshuAccount & {
   initial: string
   avatarClass: string
   visibleAvatarUrl: string
+}
+
+type PublishImageSlotStatus = 'idle' | 'generating' | 'ready' | 'failed'
+
+type PublishImageSlot = {
+  id: string
+  index: number
+  status: PublishImageSlotStatus
+  promptId: string
+  name: string
+  imageUrl: string
+  promptDescription: string
+  keywords: string[]
+  sourceKey: string
+  error: string
+}
+
+type PublishCopyEssence = {
+  title: string
+  summary: string
+  keywords: string[]
 }
 
 type XiaohongshuWebviewElement = HTMLElement & {
@@ -793,6 +863,7 @@ const iconPaths: Record<IconName, string[]> = {
   ],
   spark: ['M12 3l1.7 4.4L18 9l-4.3 1.6L12 15l-1.7-4.4L6 9l4.3-1.6L12 3Z', 'M5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8L5 14Z'],
   trend: ['M4 17l5-5 4 4 7-8', 'M14 8h6v6'],
+  trash: ['M3 6h18', 'M8 6V4h8v2', 'M6 6l1 15h10l1-15', 'M10 11v6', 'M14 11v6'],
   upload: ['M12 16V4', 'M7 9l5-5 5 5', 'M5 20h14'],
   user: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M4.5 20a7.5 7.5 0 0 1 15 0']
 }
@@ -908,6 +979,11 @@ const copyResults = ref<CopywritingItem[]>([])
 const copyModel = ref('')
 const displayedCopyResults = computed(() => (copyResults.value.length ? copyResults.value : sampleCopyResults))
 const tagInput = ref('')
+const PUBLISH_IMAGE_SLOT_COUNT = 3
+const MIN_PUBLISH_IMAGE_COUNT = 1
+const IMAGE_GENERATION_POLL_INTERVAL_MS = 2500
+const IMAGE_GENERATION_TIMEOUT_MS = 10 * 60 * 1000
+const PUBLISH_TAG_LIMIT = 7
 
 const publishDraft = reactive({
   title: '',
@@ -916,6 +992,21 @@ const publishDraft = reactive({
   schedule: 'now',
   platforms: [] as string[]
 })
+const publishLoading = ref(false)
+const publishError = ref('')
+const publishSuccess = ref('')
+const publishImageSlots = ref<PublishImageSlot[]>(createPublishImageSlots())
+const publishImagePrompts = ref<PublishImagePromptItem[]>([])
+const publishImagePromptSourceKey = ref('')
+const publishImagePromptLoading = ref(false)
+const generatedPublishImages = computed(() =>
+  publishImageSlots.value.filter(
+    (slot) => slot.status === 'ready' && slot.imageUrl && slot.sourceKey === getPublishImageSourceKey()
+  )
+)
+const publishCopyEssences = computed(() =>
+  extractPublishCopyEssences(publishDraft.content, publishDraft.title, publishDraft.tags)
+)
 
 const accounts = computed<XiaohongshuAccountView[]>(() =>
   xhsAccounts.value.map((account, index) => ({
@@ -927,7 +1018,7 @@ const accounts = computed<XiaohongshuAccountView[]>(() =>
     visibleAvatarUrl: brokenAvatarAccountIds.value.has(account.id) ? '' : account.avatarUrl || ''
   }))
 )
-const loggedInPublishAccounts = computed(() => accounts.value.filter((account) => account.status === 'saved'))
+const loggedInPublishAccounts = computed(() => accounts.value.filter(isPublishableXhsAccount))
 
 const historyRecords = computed(() => {
   const generated = sessions.value
@@ -964,6 +1055,100 @@ function closeHistory() {
   router.push(routeByPage.trends)
 }
 
+async function preparePublishFromCopy(item: CopywritingItem) {
+  const title = getCopyPublishTitle(item)
+  const content = stripPublishTagsFromCopyContent(item.content)
+  const tags = derivePublishTagsFromCopy(item)
+
+  publishDraft.title = title
+  publishDraft.content = content
+  publishDraft.tags.splice(0, publishDraft.tags.length, ...tags)
+  publishDraft.schedule = 'now'
+  tagInput.value = ''
+  publishError.value = ''
+  publishSuccess.value = ''
+  publishImagePrompts.value = []
+  publishImagePromptSourceKey.value = ''
+  publishImageSlots.value = createPublishImageSlots()
+
+  await router.push(routeByPage.publish)
+  await nextTick()
+  scrollSuiteContentToTop()
+}
+
+function getCopyPublishTitle(item: CopywritingItem) {
+  const title = item.title.trim()
+  if (title && !/^生成\d+$/.test(title)) return title
+
+  const firstCandidate = collectPublishCopyCandidates(item.content)[0]
+  return firstCandidate ? truncatePlainText(firstCandidate, 32) : title || '小红书图文'
+}
+
+function stripPublishTagsFromCopyContent(content: string) {
+  const normalized = normalizeCopyText(content)
+  if (!normalized) return ''
+
+  const cleaned = normalized
+    .split('\n')
+    .map(cleanCopyContentLine)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  return cleaned || normalized
+}
+
+function cleanCopyContentLine(line: string) {
+  const withoutTags = line
+    .replace(createCopyHashTagPattern(), '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[，,、；;：:]+$/u, '')
+    .trimEnd()
+
+  return /^(标签|话题|hashtags?)[:：]?\s*$/i.test(withoutTags.trim()) ? '' : withoutTags
+}
+
+function derivePublishTagsFromCopy(item: CopywritingItem) {
+  const tags: string[] = []
+
+  for (const tag of extractCopyHashTags(`${item.title}\n${item.content}`)) {
+    pushPublishTag(tags, tag)
+  }
+
+  for (const keyword of splitCopyKeywords(copyForm.keyword)) {
+    pushPublishTag(tags, keyword)
+  }
+
+  pushPublishTag(tags, item.angle)
+
+  return tags.slice(0, PUBLISH_TAG_LIMIT)
+}
+
+function extractCopyHashTags(value: string) {
+  return [...value.matchAll(createCopyHashTagPattern())].map((match) => match[1] || '')
+}
+
+function createCopyHashTagPattern() {
+  return /[#＃]([A-Za-z0-9_\u4e00-\u9fa5][A-Za-z0-9_\u4e00-\u9fa5-]{0,24})/g
+}
+
+function splitCopyKeywords(value: string) {
+  return value
+    .split(/[，,、；;|/\n\r]+/u)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean)
+}
+
+function pushPublishTag(tags: string[], value: string) {
+  const normalized = normalizePublishTag(cleanKeywordCandidate(value))
+  if (!normalized || tags.includes(normalized)) return
+  tags.push(normalized)
+}
+
+function scrollSuiteContentToTop() {
+  document.querySelector('.suite-content')?.scrollTo({ top: 0 })
+}
+
 function normalizePublishTag(value: string) {
   const text = value.trim().replace(/^[#＃]+/, '').trim()
   return text ? `#${text}` : ''
@@ -991,6 +1176,383 @@ function handlePublishTagEnter(event: KeyboardEvent) {
 
   event.preventDefault()
   addPublishTag()
+}
+
+function createPublishImageSlots(): PublishImageSlot[] {
+  return Array.from({ length: PUBLISH_IMAGE_SLOT_COUNT }, (_, index) => ({
+    id: `publish-image-slot-${index}`,
+    index,
+    status: 'idle',
+    promptId: '',
+    name: `图片 ${index + 1}`,
+    imageUrl: '',
+    promptDescription: '',
+    keywords: [],
+    sourceKey: '',
+    error: ''
+  }))
+}
+
+function getGenerateButtonText(slot: PublishImageSlot) {
+  if (publishImagePromptLoading.value) return '生成描述词...'
+  if (slot.status === 'generating') return '生成中...'
+  if (slot.status === 'ready') return '重新生成'
+  return '生成图片'
+}
+
+function getPublishImageSlotTitle(slot: PublishImageSlot) {
+  const imagePrompt = getPublishImagePromptItem(slot.index)
+  if (imagePrompt) {
+    const title = imagePrompt.title || `描述词 ${slot.index + 1}`
+    return slot.status === 'ready' ? `${title} · ${slot.name}` : title
+  }
+
+  const essence = publishCopyEssences.value[slot.index]
+  if (!essence) return `描述词 ${slot.index + 1}：等待生成`
+  if (slot.status === 'ready') return `${essence.title} · ${slot.name}`
+  return essence.title
+}
+
+function getPublishImageSlotKeywordText(slotIndex: number) {
+  const imagePrompt = getPublishImagePromptItem(slotIndex)
+  const keywords = imagePrompt?.keywords?.length ? imagePrompt.keywords : publishCopyEssences.value[slotIndex]?.keywords || []
+  if (!keywords.length) return '关键词：点击生成后由 LLM 生成'
+  return `关键词：${keywords.slice(0, 3).join('、')}`
+}
+
+function getPublishImagePromptItem(slotIndex: number) {
+  const slotPrompt = publishImagePrompts.value[slotIndex]
+  if (slotPrompt) return slotPrompt
+
+  const slot = publishImageSlots.value[slotIndex]
+  if (!slot?.promptDescription) return null
+  return {
+    title: `描述词 ${slotIndex + 1}`,
+    description: slot.promptDescription,
+    keywords: slot.keywords
+  }
+}
+
+function extractPublishCopyEssences(content: string, title: string, tags: string[]): PublishCopyEssence[] {
+  const candidates = pickDistinctCopyCandidates(collectPublishCopyCandidates(content), 3)
+  const normalizedTags = tags.map(normalizeTagKeyword).filter(Boolean)
+  const fallbackBase = title.trim() || normalizedTags.join('、') || '小红书营销内容'
+  const fallbackSummaries = [
+    `${fallbackBase}的核心利益点`,
+    `${fallbackBase}的主要使用场景`,
+    `${fallbackBase}的行动号召和转化理由`
+  ]
+
+  while (candidates.length < 3) {
+    candidates.push(fallbackSummaries[candidates.length])
+  }
+
+  return candidates.slice(0, 3).map((summary, index) => {
+    const keywords = extractImageKeywords(summary, title, tags)
+    const titleKeyword = keywords[0] || truncatePlainText(summary, 10)
+    return {
+      title: `精华 ${index + 1}：${titleKeyword}`,
+      summary,
+      keywords
+    }
+  })
+}
+
+function collectPublishCopyCandidates(content: string) {
+  const normalized = normalizeCopyText(content)
+  if (!normalized) return []
+
+  const lines = normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean)
+  const structured = lines
+    .map(cleanCopyCandidate)
+    .filter(isMeaningfulCopyCandidate)
+
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map(cleanCopyCandidate)
+    .filter(isMeaningfulCopyCandidate)
+
+  const sentences = normalized
+    .split(/[。！？!?]/)
+    .map(cleanCopyCandidate)
+    .filter(isMeaningfulCopyCandidate)
+
+  return [...structured, ...paragraphs, ...sentences]
+}
+
+function normalizeCopyText(value: string) {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function cleanCopyCandidate(value: string) {
+  return value
+    .replace(/^[\s#＃]*(?:[-*•]|[0-9]+[.、)）]|[一二三四五六七八九十]+[.、)）]|[①-⑩])\s*/u, '')
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isMeaningfulCopyCandidate(value: string) {
+  if (value.length < 6) return false
+  if (/^(核心亮点|核心卖点|核心优势|亮点|卖点|优势|总结|结尾|正文|标题)[:：]?$/.test(value)) return false
+  return true
+}
+
+function pickDistinctCopyCandidates(candidates: string[], limit: number) {
+  const picked: string[] = []
+  const seen = new Set<string>()
+
+  for (const candidate of candidates) {
+    const normalized = truncatePlainText(candidate.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, ''), 24)
+    if (!normalized || seen.has(normalized)) continue
+
+    seen.add(normalized)
+    picked.push(truncatePlainText(candidate, 80))
+    if (picked.length >= limit) break
+  }
+
+  return picked
+}
+
+function extractImageKeywords(summary: string, title: string, tags: string[]) {
+  const keywords: string[] = []
+  const source = [title, summary, ...tags].join('\n')
+  const segments = source
+    .split(/[，,。！？!?；;：:\n\r、|/]+/)
+    .map(cleanKeywordCandidate)
+    .filter(Boolean)
+
+  for (const tag of tags.map(normalizeTagKeyword)) {
+    pushKeyword(keywords, tag)
+  }
+
+  for (const segment of segments) {
+    pushKeyword(keywords, segment)
+  }
+
+  return keywords.slice(0, 6)
+}
+
+function cleanKeywordCandidate(value: string) {
+  const keyword = value
+    .replace(/^[\s#＃]*(?:[-*•]|[0-9]+[.、)）]|[一二三四五六七八九十]+[.、)）]|[①-⑩])\s*/u, '')
+    .replace(/[“”"'`《》【】()\[\]（）]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!keyword || keyword.length < 2 || /^[0-9.]+$/.test(keyword)) return ''
+  if (/^(标题|标签|正文摘要|核心亮点|核心卖点|总结)$/.test(keyword)) return ''
+  return truncatePlainText(keyword, 18)
+}
+
+function normalizeTagKeyword(tag: string) {
+  return cleanKeywordCandidate(tag.replace(/^[#＃]+/, ''))
+}
+
+function pushKeyword(keywords: string[], keyword: string) {
+  if (!keyword || keywords.includes(keyword)) return
+  keywords.push(keyword)
+}
+
+async function generatePublishImage(slotIndex: number) {
+  if (publishLoading.value) return
+
+  const slot = publishImageSlots.value[slotIndex]
+  if (!slot || slot.status === 'generating') return
+
+  publishError.value = ''
+  publishSuccess.value = ''
+
+  try {
+    const imagePrompts = await ensurePublishImagePrompts()
+    const imagePrompt = imagePrompts[slotIndex]
+    if (!imagePrompt?.description) {
+      throw new Error(`第 ${slotIndex + 1} 张配图缺少文生图描述词`)
+    }
+
+    const sourceKey = getPublishImageSourceKey()
+    setPublishImageSlot(slotIndex, {
+      status: 'generating',
+      promptId: '',
+      imageUrl: '',
+      promptDescription: imagePrompt.description,
+      keywords: imagePrompt.keywords,
+      sourceKey,
+      error: '',
+      name: `图片 ${slotIndex + 1}`
+    })
+
+    const task = await createImageGenerationTask({
+      prompt: imagePrompt.description,
+      width: 1920,
+      height: 1080,
+      batch_size: 1
+    })
+
+    setPublishImageSlot(slotIndex, {
+      promptId: task.prompt_id
+    })
+
+    const result = await waitForPublishImage(task.prompt_id)
+    if (!result.image?.url) {
+      throw new Error('图片生成完成但未返回预览地址')
+    }
+    if (sourceKey !== getPublishImageSourceKey()) {
+      throw new Error('文案内容已变化，请重新生成配图')
+    }
+
+    setPublishImageSlot(slotIndex, {
+      status: 'ready',
+      promptId: result.prompt_id,
+      imageUrl: result.image.url,
+      name: result.image.filename || `图片 ${slotIndex + 1}`,
+      promptDescription: imagePrompt.description,
+      keywords: imagePrompt.keywords,
+      sourceKey,
+      error: ''
+    })
+  } catch (error) {
+    setPublishImageSlot(slotIndex, {
+      status: 'failed',
+      error: getErrorMessage(error),
+      imageUrl: ''
+    })
+  }
+}
+
+async function ensurePublishImagePrompts() {
+  if (!publishDraft.title.trim()) throw new Error('请先填写标题，再生成配图描述词')
+  if (!publishDraft.content.trim()) throw new Error('请先填写正文，再生成配图描述词')
+
+  const sourceKey = getPublishImageSourceKey()
+  if (publishImagePromptSourceKey.value === sourceKey && publishImagePrompts.value.length >= PUBLISH_IMAGE_SLOT_COUNT) {
+    return publishImagePrompts.value
+  }
+
+  publishImagePromptLoading.value = true
+  publishImageSlots.value = createPublishImageSlots()
+
+  try {
+    const response = await generatePublishImagePrompts({
+      title: publishDraft.title.trim(),
+      content: publishDraft.content.trim(),
+      tags: [...publishDraft.tags]
+    })
+    if (response.items.length < PUBLISH_IMAGE_SLOT_COUNT) {
+      throw new Error(`配图描述词数量不足：期望 ${PUBLISH_IMAGE_SLOT_COUNT} 条，实际 ${response.items.length} 条`)
+    }
+
+    const items = response.items.slice(0, PUBLISH_IMAGE_SLOT_COUNT)
+    publishImagePrompts.value = items
+    publishImagePromptSourceKey.value = sourceKey
+    publishImageSlots.value = createPublishImageSlots().map((slot) => {
+      const item = items[slot.index]
+      return {
+        ...slot,
+        promptDescription: item.description,
+        keywords: item.keywords,
+        sourceKey
+      }
+    })
+    return items
+  } finally {
+    publishImagePromptLoading.value = false
+  }
+}
+
+async function waitForPublishImage(promptId: string): Promise<ImageGenerationStatusResponse> {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < IMAGE_GENERATION_TIMEOUT_MS) {
+    await delay(IMAGE_GENERATION_POLL_INTERVAL_MS)
+    const result = await getImageGenerationTask(promptId)
+
+    if (result.status === 'success') return result
+    if (result.status === 'failed') {
+      throw new Error(result.message || '图片生成失败')
+    }
+  }
+
+  throw new Error('图片生成超时，请稍后重试')
+}
+
+function setPublishImageSlot(slotIndex: number, patch: Partial<PublishImageSlot>) {
+  publishImageSlots.value = publishImageSlots.value.map((slot) => (slot.index === slotIndex ? { ...slot, ...patch } : slot))
+}
+
+function getPublishImageSourceKey() {
+  return JSON.stringify({
+    title: publishDraft.title.trim(),
+    content: publishDraft.content.trim(),
+    tags: publishDraft.tags.map((tag) => tag.trim()).filter(Boolean)
+  })
+}
+
+function delay(ms: number) {
+  return new Promise((resolveDelay) => {
+    window.setTimeout(resolveDelay, ms)
+  })
+}
+
+function validatePublishDraft() {
+  if (!publishDraft.title.trim()) return '请输入标题'
+  if (!publishDraft.content.trim()) return '请输入正文'
+  if (generatedPublishImages.value.length < MIN_PUBLISH_IMAGE_COUNT) return '请至少生成 1 张图片'
+  if (!publishDraft.platforms.length) return '请选择已登录的小红书账号'
+  if (publishDraft.schedule !== 'now') return '当前 RPA 图文发布仅支持立即发布'
+  return ''
+}
+
+async function submitPublish() {
+  const validation = validatePublishDraft()
+  if (validation) {
+    publishError.value = validation
+    publishSuccess.value = ''
+    return
+  }
+
+  publishLoading.value = true
+  publishError.value = ''
+  publishSuccess.value = ''
+
+  try {
+    const results: Array<{ status: 'published' | 'failed'; message?: string }> = []
+    const accountIds = publishDraft.platforms.map((accountId) => String(accountId))
+    const tags = publishDraft.tags.map((tag) => String(tag))
+    const imageUrls = generatedPublishImages.value.map((image) => String(image.imageUrl))
+    const title = publishDraft.title.trim()
+    const content = publishDraft.content.trim()
+
+    for (const accountId of accountIds) {
+      results.push(
+        await window.api.xiaohongshuPublisher.publishImageText({
+          accountId,
+          title,
+          content,
+          tags: [...tags],
+          imageUrls: [...imageUrls]
+        })
+      )
+    }
+
+    const allPublished = results.every((item) => item.status === 'published')
+    const failedResults = results.filter((item) => item.status === 'failed')
+
+    if (allPublished) {
+      publishSuccess.value = '小红书图文发布成功'
+    } else if (failedResults.length) {
+      publishError.value = failedResults.map((item) => item.message || '发布失败').join('; ')
+    }
+  } catch (error) {
+    publishError.value = getErrorMessage(error)
+  } finally {
+    publishLoading.value = false
+  }
 }
 
 async function loadXhsAccounts() {
@@ -1022,6 +1584,44 @@ async function addXhsAccount() {
     xhsSessionMessage.value = '已创建独立登录环境，请在下方完成小红书登录'
     await nextTick()
     openXhsLogin()
+  } catch (error) {
+    xhsSessionMessage.value = getErrorMessage(error)
+  } finally {
+    xhsAccountLoading.value = false
+  }
+}
+
+async function deleteActiveXhsAccount() {
+  const account = activeXhsAccount.value
+  if (!account || xhsAccountLoading.value) return
+
+  const accountName = getAccountDisplayName(account)
+  const confirmed = window.confirm(`确定删除「${accountName}」吗？该账号的 Cookie、缓存和本地登录数据也会被清除。`)
+  if (!confirmed) return
+
+  if (xhsAutoSaveTimer) {
+    window.clearTimeout(xhsAutoSaveTimer)
+    xhsAutoSaveTimer = null
+  }
+
+  xhsAccountLoading.value = true
+  try {
+    const deletedIndex = xhsAccounts.value.findIndex((item) => item.id === account.id)
+    const remainingAccounts = await window.api.xiaohongshuAccounts.delete(account.id)
+    xhsAccounts.value = remainingAccounts
+
+    delete xhsStartUrls[account.id]
+    restoredXhsStorageAccountIds.delete(account.id)
+    const nextBrokenIds = new Set(brokenAvatarAccountIds.value)
+    nextBrokenIds.delete(account.id)
+    brokenAvatarAccountIds.value = nextBrokenIds
+
+    const nextAccount = remainingAccounts[deletedIndex] ?? remainingAccounts[deletedIndex - 1] ?? remainingAccounts[0]
+    activeXhsAccountId.value = nextAccount?.id ?? ''
+    currentXhsUrl.value = nextAccount ? getXhsLaunchUrl(nextAccount) : XIAOHONGSHU_HOME_URL
+    xhsSessionMessage.value = nextAccount
+      ? `已删除 ${accountName}，当前切换到 ${getAccountDisplayName(nextAccount)}`
+      : `已删除 ${accountName}，请添加小红书账号`
   } catch (error) {
     xhsSessionMessage.value = getErrorMessage(error)
   } finally {
@@ -1320,11 +1920,19 @@ async function collectXhsProfile(webview: XiaohongshuWebviewElement): Promise<Xi
         }
 
         const best = candidates.sort((left, right) => score(right) - score(left))[0] || {}
+        const pageText = ((document.body && document.body.innerText) || '').replace(/\\s+/g, ' ').trim().slice(0, 4000)
+        const isLoginRoute = /\\/login(?:\\/|$)/.test(window.location.pathname)
+        const hasLoginPrompt = /(登录|注册|验证码登录|密码登录|扫码登录|手机号登录)/.test(pageText)
+        const hasCreatorWorkspace = /(发布笔记|发布作品|笔记管理|数据看板|创作中心|创作者服务|账号数据|互动管理|评论管理|粉丝管理)/.test(pageText)
+        const hasProfileCandidate = Boolean(best.nickname || best.avatarUrl)
+        const isLoggedIn =
+          !isLoginRoute && (hasProfileCandidate || hasCreatorWorkspace) && !(hasLoginPrompt && !hasCreatorWorkspace && !hasProfileCandidate)
 
         return {
           nickname: best.nickname || '',
           avatarUrl: best.avatarUrl || '',
-          capturedAt: Date.now()
+          capturedAt: Date.now(),
+          isLoggedIn
         }
       })()`
     )
@@ -1390,6 +1998,10 @@ function isXhsLoginUrl(url?: string) {
   }
 }
 
+function isPublishableXhsAccount(account: XiaohongshuAccount) {
+  return account.status === 'saved' && !isXhsLoginUrl(account.lastUrl)
+}
+
 function getAccountDisplayName(account: XiaohongshuAccount) {
   return account.nickname?.trim() || account.name
 }
@@ -1400,7 +2012,9 @@ function getAccountInitial(account: XiaohongshuAccount, index: number) {
 }
 
 function formatAccountStatus(account: XiaohongshuAccount) {
-  if (account.status !== 'saved') return '未保存登录态'
+  if (account.status !== 'saved') {
+    return account.lastSessionSaveAt ? '未登录/需重新登录' : '未保存登录态'
+  }
   return `已保存 · ${formatDateTime(account.lastSessionSaveAt || account.updatedAt)}`
 }
 
@@ -1580,6 +2194,10 @@ function truncateTitle(value: string) {
   return value.length > 18 ? `${value.slice(0, 18)}...` : value
 }
 
+function truncatePlainText(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value
+}
+
 function formatDateTime(timestamp: number) {
   return new Date(timestamp).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -1599,6 +2217,22 @@ function getErrorMessage(error: unknown) {
 watch(headerTitle, (title) => {
   document.title = `${title} - MDT Marketing`
 })
+
+watch(
+  () => getPublishImageSourceKey(),
+  (sourceKey) => {
+    const hasImagePromptState =
+      Boolean(publishImagePromptSourceKey.value) ||
+      publishImagePrompts.value.length > 0 ||
+      publishImageSlots.value.some((slot) => slot.status !== 'idle' || Boolean(slot.promptDescription))
+
+    if (!hasImagePromptState || publishImagePromptSourceKey.value === sourceKey) return
+
+    publishImagePrompts.value = []
+    publishImagePromptSourceKey.value = ''
+    publishImageSlots.value = createPublishImageSlots()
+  }
+)
 
 watch(
   loggedInPublishAccounts,
@@ -2339,6 +2973,15 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
 }
 
+.success-text {
+  margin: -6px 0 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: var(--success);
+  padding: 10px 12px;
+}
+
 .result-toolbar {
   display: flex;
   align-items: center;
@@ -2558,9 +3201,9 @@ onBeforeUnmount(() => {
 }
 
 .title-card,
+.image-upload-card,
 .editor-card,
-.publish-settings,
-.publish-alert {
+.publish-settings {
   padding: 30px;
 }
 
@@ -2600,6 +3243,194 @@ onBeforeUnmount(() => {
 
 .tag-remove-button:hover {
   background: rgba(0, 88, 190, 0.12);
+}
+
+.image-upload-card {
+  display: grid;
+  gap: 18px;
+}
+
+.publish-image-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.publish-image-head > span {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.publish-image-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.publish-image-slot {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+}
+
+.publish-image-preview {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed #b8c3d6;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.publish-image-slot.status-ready .publish-image-preview {
+  border-style: solid;
+  border-color: var(--outline);
+  background: #f1f5f9;
+}
+
+.publish-image-slot.status-failed .publish-image-preview {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.publish-image-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.publish-image-placeholder {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: #526070;
+  padding: 18px;
+}
+
+.publish-image-placeholder svg {
+  width: 30px;
+  height: 30px;
+  color: var(--primary);
+}
+
+.publish-image-placeholder strong {
+  color: #111827;
+  font-size: 16px;
+}
+
+.publish-image-skeleton {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #e8eef7;
+  animation: publish-image-pulse 1.1s ease-in-out infinite;
+}
+
+.publish-image-skeleton::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  transform: translateX(-100%);
+  animation: publish-image-shimmer 1.2s ease-in-out infinite;
+}
+
+.publish-image-skeleton span {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.publish-image-skeleton span:nth-child(1) {
+  top: 28%;
+}
+
+.publish-image-skeleton span:nth-child(2) {
+  top: 48%;
+  right: 42%;
+}
+
+.publish-image-skeleton span:nth-child(3) {
+  top: 68%;
+  right: 28%;
+}
+
+.publish-image-slot figcaption {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.publish-image-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.publish-image-meta strong,
+.publish-image-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.publish-image-meta strong {
+  color: #111827;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.publish-image-meta span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.generate-image-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.publish-image-slot-error {
+  margin: -2px 0 0;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@keyframes publish-image-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes publish-image-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.generate-image-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .editor-card {
@@ -2746,50 +3577,13 @@ onBeforeUnmount(() => {
   font-size: 22px;
 }
 
-.publish-alert {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 16px;
-  border: 1px solid #f2aaaa;
-  border-radius: 12px;
-  background: #ffd7d4;
-  color: #93000a;
+.publish-action:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
-.publish-alert h3,
-.publish-alert p {
+.publish-error {
   margin: 0;
-}
-
-.publish-alert p {
-  margin-top: 4px;
-  color: #8d3838;
-}
-
-.publish-alert div div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 18px;
-  margin-top: 36px;
-}
-
-.publish-alert button {
-  border: 0;
-  background: transparent;
-  color: #93000a;
-  cursor: pointer;
-  font-weight: 800;
-}
-
-.publish-alert button:last-child {
-  display: inline-flex;
-  min-height: 46px;
-  align-items: center;
-  gap: 8px;
-  border-radius: 8px;
-  background: #a60010;
-  color: #ffffff;
-  padding: 0 18px;
 }
 
 .suite-content.page-accounts {
@@ -2932,13 +3726,18 @@ onBeforeUnmount(() => {
 .account-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   background: #f6f8fd;
   padding: 24px 28px;
 }
 
 .account-actions button {
+  display: inline-flex;
   min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid #c5ccd8;
   border-radius: 6px;
   background: #ffffff;
@@ -2950,6 +3749,11 @@ onBeforeUnmount(() => {
   padding: 0 14px;
 }
 
+.account-actions button svg {
+  width: 16px;
+  height: 16px;
+}
+
 .account-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -2959,6 +3763,12 @@ onBeforeUnmount(() => {
   border-color: #1d68d8;
   background: #1d68d8;
   color: #ffffff;
+}
+
+.account-actions .danger-lite {
+  border-color: #e2a3a3;
+  background: #fff5f5;
+  color: #b42318;
 }
 
 .login-browser-frame {
@@ -3251,6 +4061,10 @@ onBeforeUnmount(() => {
 
   .platform-grid,
   .radio-row {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-image-slots {
     grid-template-columns: 1fr;
   }
 

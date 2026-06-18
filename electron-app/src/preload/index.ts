@@ -6,6 +6,7 @@ const api = {
   xiaohongshuAccounts: {
     list: () => ipcRenderer.invoke('xhs-accounts:list'),
     create: (payload?: { name?: string }) => ipcRenderer.invoke('xhs-accounts:create', payload),
+    delete: (accountId: string) => ipcRenderer.invoke('xhs-accounts:delete', accountId),
     saveSession: (payload: {
       accountId: string
       url?: string
@@ -14,6 +15,7 @@ const api = {
         nickname?: string
         avatarUrl?: string
         capturedAt?: number
+        isLoggedIn?: boolean
       }
       webStorage?: {
         localStorage: Record<string, string>
@@ -23,7 +25,18 @@ const api = {
       }
     }) => ipcRenderer.invoke('xhs-accounts:save-session', payload),
     getWebStorage: (accountId: string) => ipcRenderer.invoke('xhs-accounts:get-web-storage', accountId)
+  },
+
+  xiaohongshuPublisher: {
+    publishImageText: (payload: {
+      accountId: string
+      title: string
+      content: string
+      tags: string[]
+      imageUrls: string[]
+    }) => ipcRenderer.invoke('xhs-publisher:publish-image-text', payload)
   }
+
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

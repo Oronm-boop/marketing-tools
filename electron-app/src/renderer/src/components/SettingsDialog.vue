@@ -12,7 +12,7 @@
           </div>
           <div>
             <h2 id="settings-title">模型设置</h2>
-            <p>选择大模型类型并配置连接参数</p>
+            <p>配置大模型和 ComfyUI 服务地址</p>
           </div>
           <button class="close-btn" type="button" aria-label="关闭" @click="handleClose">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -39,6 +39,74 @@
               <span class="provider-tab-label">{{ opt.label }}</span>
               <span class="provider-tab-desc">{{ opt.desc }}</span>
             </button>
+          </div>
+        </div>
+
+        <!-- ComfyUI 配置 -->
+        <div class="section fields-section">
+          <div class="section-title">
+            <span class="section-dot dot-comfyui" aria-hidden="true"></span>
+            ComfyUI 服务配置
+          </div>
+          <div class="field-row two-col">
+            <div class="field">
+              <label class="field-label" for="comfyui-image-ip">生图 IP 地址</label>
+              <input
+                id="comfyui-image-ip"
+                v-model="comfyuiImageHost"
+                type="text"
+                class="field-input"
+                placeholder="192.168.0.122"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div class="field">
+              <label class="field-label" for="comfyui-image-port">端口</label>
+              <input
+                id="comfyui-image-port"
+                v-model="comfyuiImagePort"
+                type="number"
+                class="field-input"
+                placeholder="8188"
+                min="1"
+                max="65535"
+              />
+            </div>
+          </div>
+          <div class="url-preview">
+            <span class="url-preview-label">生图地址：</span>
+            <code>{{ comfyuiBaseUrl }}</code>
+          </div>
+          <div class="field-row two-col">
+            <div class="field">
+              <label class="field-label" for="comfyui-video-ip">生视频 IP 地址</label>
+              <input
+                id="comfyui-video-ip"
+                v-model="comfyuiVideoHost"
+                type="text"
+                class="field-input"
+                placeholder="192.168.0.122"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div class="field">
+              <label class="field-label" for="comfyui-video-port">端口</label>
+              <input
+                id="comfyui-video-port"
+                v-model="comfyuiVideoPort"
+                type="number"
+                class="field-input"
+                placeholder="8188"
+                min="1"
+                max="65535"
+              />
+            </div>
+          </div>
+          <div class="url-preview">
+            <span class="url-preview-label">生视频地址：</span>
+            <code>{{ comfyuiVideoBaseUrl }}</code>
           </div>
         </div>
 
@@ -279,6 +347,10 @@ const localIp = ref('192.168.0.105')
 const localPort = ref('8081')
 const ollamaHost = ref('localhost')
 const ollamaPort = ref('11434')
+const comfyuiImageHost = ref('192.168.0.122')
+const comfyuiImagePort = ref('8188')
+const comfyuiVideoHost = ref('192.168.0.122')
+const comfyuiVideoPort = ref('8188')
 
 const MASKED = '********'
 const isKeyMasked = computed(() => form.qwenApiKey === MASKED)
@@ -288,6 +360,12 @@ const localBaseUrl = computed(
 )
 const ollamaBaseUrl = computed(
   () => `http://${ollamaHost.value || 'localhost'}:${ollamaPort.value || '11434'}/v1`
+)
+const comfyuiBaseUrl = computed(
+  () => `http://${comfyuiImageHost.value.trim()}:${comfyuiImagePort.value.trim()}`
+)
+const comfyuiVideoBaseUrl = computed(
+  () => `http://${comfyuiVideoHost.value.trim()}:${comfyuiVideoPort.value.trim()}`
 )
 
 function parseBaseUrl(url: string): { host: string; port: string } {
@@ -300,6 +378,21 @@ function parseBaseUrl(url: string): { host: string; port: string } {
   } catch {
     return { host: '', port: '' }
   }
+}
+
+function isValidPort(port: string): boolean {
+  const value = Number(port)
+  return Number.isInteger(value) && value >= 1 && value <= 65535
+}
+
+function validateComfyUIEndpoint(label: string, host: string, port: string): string {
+  if (!host.trim()) {
+    return `请输入 ${label} 的 IP 地址`
+  }
+  if (!isValidPort(port)) {
+    return `请输入 ${label} 的有效端口（1-65535）`
+  }
+  return ''
 }
 
 function syncFromStore() {
@@ -317,6 +410,14 @@ function syncFromStore() {
   const ollamaParsed = parseBaseUrl(settingsStore.ollamaBaseUrl)
   ollamaHost.value = ollamaParsed.host || 'localhost'
   ollamaPort.value = ollamaParsed.port || '11434'
+
+  const comfyuiParsed = parseBaseUrl(settingsStore.comfyuiBaseUrl)
+  comfyuiImageHost.value = comfyuiParsed.host || '192.168.0.122'
+  comfyuiImagePort.value = comfyuiParsed.port || '8188'
+
+  const comfyuiVideoParsed = parseBaseUrl(settingsStore.comfyuiVideoBaseUrl)
+  comfyuiVideoHost.value = comfyuiVideoParsed.host || '192.168.0.122'
+  comfyuiVideoPort.value = comfyuiVideoParsed.port || '8188'
 }
 
 watch(
@@ -351,6 +452,14 @@ async function handleSave() {
     return
   }
 
+  const comfyuiValidationError =
+    validateComfyUIEndpoint('ComfyUI 生图服务', comfyuiImageHost.value, comfyuiImagePort.value) ||
+    validateComfyUIEndpoint('ComfyUI 生视频服务', comfyuiVideoHost.value, comfyuiVideoPort.value)
+  if (comfyuiValidationError) {
+    errorMsg.value = comfyuiValidationError
+    return
+  }
+
   try {
     await settingsStore.save({
       provider: form.provider,
@@ -360,7 +469,9 @@ async function handleSave() {
       ollama_model: form.ollamaModel,
       qwen_api_key: form.qwenApiKey,
       qwen_base_url: form.qwenBaseUrl,
-      qwen_model: form.qwenModel
+      qwen_model: form.qwenModel,
+      comfyui_base_url: comfyuiBaseUrl.value,
+      comfyui_video_base_url: comfyuiVideoBaseUrl.value
     })
     successMsg.value = '设置已保存，下次请求将使用新配置'
     setTimeout(() => {
@@ -626,6 +737,10 @@ const providerOptions: Array<{
 
 .dot-cloud {
   background: #7c3aed;
+}
+
+.dot-comfyui {
+  background: #0058be;
 }
 
 .field-row.two-col {

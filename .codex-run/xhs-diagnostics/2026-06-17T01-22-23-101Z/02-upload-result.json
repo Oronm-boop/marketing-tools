@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "fileCount": 1,
+  "accept": ".jpg,.jpeg,.png,.webp",
+  "className": "upload-input"
+}

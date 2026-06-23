@@ -62,8 +62,8 @@ const ELEMENT_WAIT_TIMEOUT_MS = 15_000
 const PUBLISH_CONFIRM_TIMEOUT_MS = 30_000
 const POLL_INTERVAL_MS = 500
 
-/** 设置为 true 显示 RPA 浏览器窗口，方便调试 DOM 选择器 */
-const RPA_DEBUG = process.env['XHS_RPA_DEBUG'] !== '0'
+/** 仅开发环境显示 RPA 浏览器窗口和 DevTools，方便调试 DOM 选择器 */
+const RPA_DEBUG = !app.isPackaged && process.env['XHS_RPA_DEBUG'] !== '0'
 
 /** 日志文件路径 — 写入到项目根目录的 xiaohongshu-publish-debug.log */
 const LOG_FILE_PATH = (() => {

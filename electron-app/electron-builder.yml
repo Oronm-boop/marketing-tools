@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: electron-app
+appId: com.market.sales
+productName: Market Sales
 directories:
   buildResources: build
 files:
@@ -14,16 +14,17 @@ asarUnpack:
 extraResources:
   - from: ../backend/dist/mdt-ai-backend.exe
     to: backend/mdt-ai-backend.exe
-  - from: ../backend/.env.example
+  - from: ../backend/.env
     to: backend/.env
   - from: License
     to: license
     filter:
       - '*.dll'
 win:
-  executableName: electron-app
+  icon: build/icon.ico
+  executableName: Market Sales
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -36,7 +37,7 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
 linux:
   target:
     - AppImage
@@ -45,7 +46,7 @@ linux:
   maintainer: electronjs.org
   category: Utility
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
 npmRebuild: false
 publish:
   provider: generic

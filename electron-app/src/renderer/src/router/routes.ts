@@ -1,13 +1,11 @@
 export const AppRoutes = [
     {
         path: "/",
-        redirect: "/trends"
+        redirect: "/seo"
     },
     {
         path: "/trends",
-        name:'热点分析',
-        meta: { page: 'trends' },
-        component: ()=>import('@views/MarketingSuite.vue')
+        redirect: "/seo"
     },
     {
         path: "/seo",

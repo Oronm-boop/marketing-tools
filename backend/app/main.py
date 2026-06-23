@@ -66,6 +66,8 @@ def create_app() -> FastAPI:
             qwen_api_key=masked_key,
             qwen_base_url=s.qwen_base_url,
             qwen_model=s.qwen_model,
+            comfyui_base_url=s.comfyui_base_url,
+            comfyui_video_base_url=s.comfyui_video_base_url,
         )
 
     @app.put("/api/model-settings", response_model=ModelSettingsRead)
@@ -84,6 +86,10 @@ def create_app() -> FastAPI:
             updates["QWEN_BASE_URL"] = payload.qwen_base_url
         if payload.qwen_model is not None:
             updates["QWEN_MODEL"] = payload.qwen_model
+        if payload.comfyui_base_url is not None:
+            updates["COMFYUI_BASE_URL"] = payload.comfyui_base_url
+        if payload.comfyui_video_base_url is not None:
+            updates["COMFYUI_VIDEO_BASE_URL"] = payload.comfyui_video_base_url
         # 仅在非占位符时才更新 API Key
         if payload.qwen_api_key is not None and payload.qwen_api_key != _MASKED:
             updates["QWEN_API_KEY"] = payload.qwen_api_key
@@ -105,6 +111,8 @@ def create_app() -> FastAPI:
             qwen_api_key=masked_key,
             qwen_base_url=s.qwen_base_url,
             qwen_model=s.qwen_model,
+            comfyui_base_url=s.comfyui_base_url,
+            comfyui_video_base_url=s.comfyui_video_base_url,
         )
 
     @app.post(

@@ -68,7 +68,7 @@ GENERATED_IMAGE_CACHE_MAX_AGE_SECONDS=31536000
 生成图片第一次预览时会缓存到用户本机，后续同一张图优先读取本机缓存，并通过浏览器强缓存减少发布中心重复下载。Windows 默认目录：
 
 ```text
-%LOCALAPPDATA%\MDT Marketing\generated-images
+%LOCALAPPDATA%\Market Sales\generated-images
 ```
 
 如需自定义目录，可在 `.env` 设置：

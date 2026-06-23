@@ -1,6 +1,6 @@
 import { app, dialog } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
-import { createWriteStream, existsSync, mkdirSync } from 'fs'
+import { copyFileSync, createWriteStream, existsSync, mkdirSync } from 'fs'
 import { get } from 'http'
 import { join, resolve } from 'path'
 import { is } from '@electron-toolkit/utils'
@@ -27,12 +27,14 @@ export async function startBackend(): Promise<void> {
   }
 
   const command = resolveBackendCommand()
+  const envFile = resolveBackendEnvFile(command.cwd)
   const processRef = spawn(command.command, command.args, {
     cwd: command.cwd,
     env: {
       ...process.env,
       BACKEND_HOST,
       BACKEND_PORT: String(BACKEND_PORT),
+      MDT_BACKEND_ENV_FILE: envFile,
       PYTHONUTF8: '1'
     },
     stdio: is.dev ? 'pipe' : ['ignore', 'pipe', 'pipe'],
@@ -100,6 +102,20 @@ function resolveBackendCommand(): BackendCommand {
     args: ['run_backend.py'],
     cwd: backendDir
   }
+}
+
+function resolveBackendEnvFile(backendDir: string): string {
+  const userBackendDir = join(app.getPath('userData'), 'backend')
+  const userEnvFile = join(userBackendDir, '.env')
+  const bundledEnvFile = join(backendDir, '.env')
+
+  mkdirSync(userBackendDir, { recursive: true })
+
+  if (!existsSync(userEnvFile) && existsSync(bundledEnvFile)) {
+    copyFileSync(bundledEnvFile, userEnvFile)
+  }
+
+  return userEnvFile
 }
 
 function pipeBackendLogs(processRef: ChildProcess): void {

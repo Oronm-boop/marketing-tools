@@ -11,6 +11,8 @@ export interface ModelSettingsRead {
   qwen_api_key: string
   qwen_base_url: string
   qwen_model: string
+  comfyui_base_url: string
+  comfyui_video_base_url: string
 }
 
 export interface ModelSettingsWrite {
@@ -22,6 +24,8 @@ export interface ModelSettingsWrite {
   qwen_api_key?: string
   qwen_base_url?: string
   qwen_model?: string
+  comfyui_base_url?: string
+  comfyui_video_base_url?: string
 }
 
 export function fetchModelSettings(): Promise<ModelSettingsRead> {

@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from .config import Settings
+from .config import HARDCODED_TAVILY_API_KEY, Settings
 from .schemas import CopywritingRequest, SeoKeywordRequest
 
 
@@ -56,8 +56,12 @@ class TavilySearchClient:
         except httpx.HTTPStatusError as exc:
             message = _extract_search_error(exc.response)
             raise WebSearchError(f"Tavily 搜索请求失败：{message}") from exc
+        except httpx.ConnectError as exc:
+            message = _format_network_error(exc, endpoint)
+            raise WebSearchError(f"Tavily 搜索网络请求失败：{message}") from exc
         except httpx.HTTPError as exc:
-            raise WebSearchError(f"Tavily 搜索网络请求失败：{exc}") from exc
+            message = _format_network_error(exc, endpoint)
+            raise WebSearchError(f"Tavily 搜索网络请求失败：{message}") from exc
 
         try:
             data = response.json()
@@ -78,9 +82,7 @@ class TavilySearchClient:
 
     @property
     def _api_key(self) -> str:
-        if self.settings.tavily_api_key is None:
-            return ""
-        return self.settings.tavily_api_key.get_secret_value().strip()
+        return HARDCODED_TAVILY_API_KEY.strip()
 
 
 def build_seo_search_query(payload: SeoKeywordRequest) -> str:
@@ -178,3 +180,14 @@ def _extract_search_error(response: httpx.Response) -> str:
     if error:
         return str(error)[:500]
     return str(data)[:500]
+
+
+def _format_network_error(exc: httpx.HTTPError, endpoint: str) -> str:
+    detail = str(exc).strip()
+    if detail:
+        return detail
+
+    return (
+        f"无法连接到 {endpoint}，请检查当前网络、代理/VPN 或 DNS "
+        "是否允许访问 api.tavily.com"
+    )

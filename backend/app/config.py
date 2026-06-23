@@ -13,11 +13,22 @@ else:
     BASE_DIR = Path(__file__).resolve().parents[1]
 
 
+def get_env_file() -> Path:
+    env_file = getenv("MDT_BACKEND_ENV_FILE")
+    if env_file:
+        return Path(env_file).expanduser()
+    return BASE_DIR / ".env"
+
+
+ENV_FILE = get_env_file()
+HARDCODED_TAVILY_API_KEY = "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"
+
+
 def default_generated_image_cache_dir() -> Path:
     local_app_data = getenv("LOCALAPPDATA")
     if local_app_data:
-        return Path(local_app_data) / "MDT Marketing" / "generated-images"
-    return Path.home() / ".mdt-marketing" / "generated-images"
+        return Path(local_app_data) / "Market Sales" / "generated-images"
+    return Path.home() / ".market-sales" / "generated-images"
 
 
 class Settings(BaseSettings):
@@ -47,8 +58,9 @@ class Settings(BaseSettings):
     tavily_max_results: int = Field(default=5, ge=1, le=10)
     tavily_timeout_seconds: float = Field(default=30, gt=0)
 
-    # ComfyUI 文生图服务
+    # ComfyUI 生图 / 生视频服务
     comfyui_base_url: str = "http://192.168.0.122:8188"
+    comfyui_video_base_url: str = "http://192.168.0.122:8188"
     comfyui_timeout_seconds: float = Field(default=600, gt=0)
     generated_image_cache_dir: Path = Field(default_factory=default_generated_image_cache_dir)
     generated_image_cache_max_age_seconds: int = Field(default=31536000, gt=0)
@@ -60,7 +72,7 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -81,7 +93,8 @@ def get_settings() -> Settings:
 
 def update_env_file(updates: dict[str, str]) -> None:
     """将给定的键值对写入 .env 文件（存在则更新，不存在则追加）。"""
-    env_path = BASE_DIR / ".env"
+    env_path = ENV_FILE
+    env_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     if env_path.exists():
         lines = env_path.read_text(encoding="utf-8").splitlines()

@@ -16,6 +16,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const qwenBaseUrl = ref('https://dashscope.aliyuncs.com/compatible-mode/v1')
   const qwenModel = ref('qwen-plus')
 
+  const comfyuiBaseUrl = ref('http://192.168.0.122:8188')
+  const comfyuiVideoBaseUrl = ref('http://192.168.0.122:8188')
+
   const loading = ref(false)
   const saving = ref(false)
 
@@ -28,6 +31,8 @@ export const useSettingsStore = defineStore('settings', () => {
     qwenApiKey.value = data.qwen_api_key
     qwenBaseUrl.value = data.qwen_base_url
     qwenModel.value = data.qwen_model
+    comfyuiBaseUrl.value = data.comfyui_base_url
+    comfyuiVideoBaseUrl.value = data.comfyui_video_base_url
   }
 
   async function load() {
@@ -59,6 +64,8 @@ export const useSettingsStore = defineStore('settings', () => {
     qwenApiKey,
     qwenBaseUrl,
     qwenModel,
+    comfyuiBaseUrl,
+    comfyuiVideoBaseUrl,
     loading,
     saving,
     load,

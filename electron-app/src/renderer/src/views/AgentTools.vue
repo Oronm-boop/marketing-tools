@@ -2,7 +2,7 @@
   <div class="agent-page">
     <aside class="agent-sidebar" aria-label="聊天历史">
       <div class="brand">
-        <h1>MDT AI Agent</h1>
+        <h1>Market Sales</h1>
       </div>
 
       <div class="sidebar-body">
@@ -816,7 +816,7 @@ function getFallbackCopyPlatform(entry: GenerationEntry, index: number) {
 }
 
 onMounted(() => {
-  document.title = 'MDT AI Agent'
+  document.title = 'Market Sales'
   if (activeSession.value) {
     hydrateFromSession(activeSession.value)
   }

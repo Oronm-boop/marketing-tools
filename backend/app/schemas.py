@@ -181,6 +181,9 @@ class ModelSettingsRead(BaseModel):
     qwen_base_url: str
     qwen_model: str
 
+    comfyui_base_url: str
+    comfyui_video_base_url: str
+
 
 class ModelSettingsWrite(BaseModel):
     """前端提交的模型配置更新请求。"""
@@ -196,6 +199,9 @@ class ModelSettingsWrite(BaseModel):
     qwen_api_key: str | None = None
     qwen_base_url: str | None = None
     qwen_model: str | None = None
+
+    comfyui_base_url: str | None = None
+    comfyui_video_base_url: str | None = None
 
 
 def _clean_string_list(value: Any) -> list[str]:

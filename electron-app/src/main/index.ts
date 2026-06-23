@@ -7,8 +7,8 @@ import { verifyLicense } from './license'
 import { registerXiaohongshuAccountIpc } from './xiaohongshuAccounts'
 import { registerXiaohongshuPublisherIpc } from './xiaohongshuPublisher'
 
-const PREFERRED_WINDOW_WIDTH = 1280
-const PREFERRED_WINDOW_HEIGHT = 800
+const PREFERRED_WINDOW_WIDTH = 1984
+const PREFERRED_WINDOW_HEIGHT = 1274
 const MIN_WINDOW_WIDTH = 1024
 const MIN_WINDOW_HEIGHT = 640
 
@@ -26,7 +26,7 @@ function createWindow(): BrowserWindow {
     center: true,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -89,7 +89,7 @@ if (!gotSingleInstanceLock) {
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(async () => {
     // Set app user model id for windows
-    electronApp.setAppUserModelId('com.electron')
+    electronApp.setAppUserModelId('com.market.sales')
 
     // Default open or close DevTools by F12 in development
     // and ignore CommandOrControl + R in production.

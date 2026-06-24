@@ -1,10 +1,10 @@
 import { app, ipcMain, BrowserWindow } from 'electron'
-import { mkdtemp, readFile, rm } from 'fs/promises'
+import { copyFile, mkdtemp, readFile, rm, stat } from 'fs/promises'
 import { appendFileSync, createWriteStream, mkdirSync } from 'fs'
 import { request as httpRequest } from 'http'
 import { request as httpsRequest } from 'https'
 import { tmpdir } from 'os'
-import { dirname, extname, join, resolve } from 'path'
+import { dirname, extname, isAbsolute, join, resolve } from 'path'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -124,11 +124,11 @@ async function runPublishSteps(
   await ensureImageTextTab(win)
   await delay(1500)
 
-  const preparedImages = await prepareGeneratedImageFiles(payload.imageUrls)
+  const preparedImages = await preparePublishImageFiles(payload.imageUrls)
 
   try {
     // ── Step 3: 上传图片 (CDP) ────────────────────────────────────────────────
-    log(`[3/7] 上传 ${preparedImages.paths.length} 张生成图片`)
+    log(`[3/7] 上传 ${preparedImages.paths.length} 张图片`)
     await uploadImagesViaCDP(win, preparedImages.paths)
 
     // ── Step 4: 等待上传完成 ──────────────────────────────────────────────────
@@ -168,15 +168,22 @@ async function runPublishSteps(
   return { status: 'published' }
 }
 
-async function prepareGeneratedImageFiles(imageUrls: string[]): Promise<PreparedPublishImages> {
+async function preparePublishImageFiles(imageReferences: string[]): Promise<PreparedPublishImages> {
   const tempDir = await mkdtemp(join(tmpdir(), 'mdt-xhs-images-'))
   const paths: string[] = []
 
   try {
-    for (const [index, imageUrl] of imageUrls.entries()) {
-      const targetPath = join(tempDir, `generated-${index + 1}${inferImageExtension(imageUrl)}`)
-      log(`下载生成图片 ${index + 1}/${imageUrls.length}: ${imageUrl}`)
-      await downloadImageToFile(imageUrl, targetPath)
+    for (const [index, imageReference] of imageReferences.entries()) {
+      const targetPath = join(tempDir, `publish-${index + 1}${inferImageExtension(imageReference)}`)
+      if (isRemoteImageReference(imageReference)) {
+        log(`下载生成图片 ${index + 1}/${imageReferences.length}: ${imageReference}`)
+        await downloadImageToFile(imageReference, targetPath)
+      } else {
+        const localPath = resolveLocalImagePath(imageReference)
+        log(`复制上传图片 ${index + 1}/${imageReferences.length}: ${localPath}`)
+        await ensureReadableLocalImage(localPath)
+        await copyFile(localPath, targetPath)
+      }
       paths.push(targetPath)
     }
   } catch (error) {
@@ -188,11 +195,34 @@ async function prepareGeneratedImageFiles(imageUrls: string[]): Promise<Prepared
 }
 
 function inferImageExtension(imageUrl: string): string {
-  const parsed = new URL(imageUrl)
-  const filename = parsed.searchParams.get('filename') || parsed.pathname
+  const parsed = isRemoteImageReference(imageUrl) ? new URL(imageUrl) : null
+  const filename = parsed?.searchParams.get('filename') || parsed?.pathname || imageUrl
   const extension = extname(filename).toLowerCase()
-  if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) return extension
+  if (['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'].includes(extension)) return extension
   return '.png'
+}
+
+function isRemoteImageReference(imageReference: string): boolean {
+  try {
+    const parsedUrl = new URL(imageReference)
+    return ['http:', 'https:'].includes(parsedUrl.protocol)
+  } catch {
+    return false
+  }
+}
+
+function resolveLocalImagePath(imageReference: string): string {
+  if (!isAbsolute(imageReference)) {
+    throw new Error(`本地图片路径无效: ${imageReference}`)
+  }
+  return resolve(imageReference)
+}
+
+async function ensureReadableLocalImage(imagePath: string): Promise<void> {
+  const imageStats = await stat(imagePath)
+  if (!imageStats.isFile()) {
+    throw new Error(`本地图片不是文件: ${imagePath}`)
+  }
 }
 
 function downloadImageToFile(
@@ -986,17 +1016,18 @@ function validatePayload(payload: PublishImageTextPayload): void {
   if (!payload.accountId) throw new Error('缺少账号 ID')
   if (!payload.title?.trim()) throw new Error('标题不能为空')
   if (!payload.content?.trim()) throw new Error('正文不能为空')
-  if (!payload.imageUrls?.length) throw new Error('请先生成图片')
+  if (!payload.imageUrls?.length) throw new Error('请先添加图片')
   if (payload.imageUrls.length > 18) throw new Error('最多支持 18 张图片')
 
-  for (const imageUrl of payload.imageUrls) {
-    try {
-      const parsedUrl = new URL(imageUrl)
-      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-        throw new Error('invalid protocol')
-      }
-    } catch {
-      throw new Error(`图片地址无效: ${imageUrl}`)
+  for (const imageReference of payload.imageUrls) {
+    if (!imageReference?.trim()) {
+      throw new Error('图片地址或路径不能为空')
+    }
+    if (isRemoteImageReference(imageReference)) {
+      continue
+    }
+    if (!isAbsolute(imageReference)) {
+      throw new Error(`图片地址或路径无效: ${imageReference}`)
     }
   }
 }

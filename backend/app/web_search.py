@@ -95,8 +95,11 @@ def build_seo_search_query(payload: SeoKeywordRequest) -> str:
 
 def build_copywriting_search_query(payload: CopywritingRequest) -> str:
     platforms = " ".join(payload.platform_styles)
+    product_context = " ".join(
+        part for part in [payload.business_description, payload.product_features] if part
+    )
     return (
-        f"{payload.keyword} {platforms} 最新趋势 用户痛点 热门话题 "
+        f"{payload.keyword} {product_context} {platforms} 最新趋势 用户痛点 热门话题 "
         f"购买决策 真实体验 口碑对比 {date.today().year}"
     )
 

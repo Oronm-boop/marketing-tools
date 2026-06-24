@@ -11,6 +11,7 @@ from pydantic import (
 
 
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+CopyLength = Literal["短", "中", "长"]
 
 
 class SeoKeywordRequest(BaseModel):
@@ -63,6 +64,14 @@ class SeoKeywordResponse(BaseModel):
 
 
 class CopywritingRequest(BaseModel):
+    business_description: str = Field(
+        default="",
+        validation_alias=AliasChoices("business_description", "business", "业务描述", "我是做什么的"),
+    )
+    product_features: str = Field(
+        default="",
+        validation_alias=AliasChoices("product_features", "features", "特点", "产品特点"),
+    )
     keyword: NonEmptyString
     keyword_repeat_count: int = Field(
         default=1,
@@ -80,8 +89,17 @@ class CopywritingRequest(BaseModel):
         default_factory=lambda: ["小红书"],
         validation_alias=AliasChoices("platform_styles", "platformStyles", "platform_style", "platforms", "platform"),
     )
+    copy_length: CopyLength = Field(
+        default="中",
+        validation_alias=AliasChoices("copy_length", "copyLength", "length", "文案长度"),
+    )
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("business_description", "product_features", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: Any) -> str:
+        return str(value or "").strip()
 
     @field_validator("platform_styles", mode="before")
     @classmethod
@@ -94,6 +112,19 @@ class CopywritingRequest(BaseModel):
         if len(normalized) > 8:
             raise ValueError("platform_styles 最多支持 8 个平台风格")
         return normalized
+
+    @field_validator("copy_length", mode="before")
+    @classmethod
+    def normalize_copy_length(cls, value: Any) -> str:
+        text = str(value or "").strip()
+        length_aliases = {
+            "短": "短",
+            "中": "中",
+            "长": "长",
+        }
+        if text not in length_aliases:
+            raise ValueError("copy_length 必须为 短、中、长")
+        return length_aliases[text]
 
 
 class CopywritingItem(BaseModel):

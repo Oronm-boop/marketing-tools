@@ -19,11 +19,16 @@ export type SeoKeywordResponse = {
 }
 
 export type CopywritingPayload = {
+  business_description: string
+  product_features: string
   keyword: string
   keyword_repeat_count: number
   article_count: number
   platform_styles: string[]
+  copy_length: CopyLength
 }
+
+export type CopyLength = '短' | '中' | '长'
 
 export type CopywritingItem = {
   title: string

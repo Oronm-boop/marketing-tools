@@ -16,7 +16,7 @@
           @click="item.page && goToPage(item.page)"
         >
           <span class="nav-icon">
-            <IconGlyph :name="item.icon" />
+            <img class="nav-icon-image" :src="item.iconUrl" alt="" aria-hidden="true" />
           </span>
           <span>{{ item.label }}</span>
         </button>
@@ -30,13 +30,13 @@
           @click="goToPage('accounts')"
         >
           <span class="nav-icon">
-            <IconGlyph name="account" />
+            <img class="nav-icon-image" :src="accountManageIconUrl" alt="" aria-hidden="true" />
           </span>
           <span>账号管理</span>
         </button>
         <button class="nav-item" type="button" @click="openSettings">
           <span class="nav-icon">
-            <IconGlyph name="settings" />
+            <img class="nav-icon-image" :src="settingsIconUrl" alt="" aria-hidden="true" />
           </span>
           <span>设置</span>
         </button>
@@ -44,7 +44,7 @@
 
       <button class="help-center" type="button" @click="openHelpDialog">
         <span class="nav-icon">
-          <IconGlyph name="help" />
+          <img class="nav-icon-image" :src="helpIconUrl" alt="" aria-hidden="true" />
         </span>
         <span>帮助</span>
       </button>
@@ -289,6 +289,23 @@
 
             <div class="reference-fields copy-reference-fields">
               <label class="input-field">
+                <span>我是做什么的</span>
+                <input
+                  v-model="copyForm.business"
+                  :disabled="copyLoading"
+                  type="text"
+                  placeholder="例如：高端智能家居设备厂商"
+                />
+              </label>
+              <label class="input-field">
+                <span>产品特点</span>
+                <textarea
+                  v-model="copyForm.features"
+                  :disabled="copyLoading"
+                  placeholder="描述产品核心卖点、竞争优势或目标客群..."
+                ></textarea>
+              </label>
+              <label class="input-field">
                 <span>核心关键词</span>
                 <input
                   v-model="copyForm.keyword"
@@ -320,20 +337,71 @@
               </fieldset>
               <label class="select-field">
                 <span>生成篇数</span>
-                <select v-model.number="copyForm.articleCount" :disabled="copyLoading">
-                  <option :value="1">1</option>
-                  <option :value="3">3</option>
-                  <option :value="5">5</option>
-                  <option :value="8">8</option>
-                </select>
+                <div
+                  class="custom-select"
+                  :class="{ open: copyDropdownOpen === 'articleCount', disabled: copyLoading }"
+                  @focusout="handleCopyDropdownFocusout"
+                >
+                  <button
+                    class="custom-select-trigger"
+                    :aria-expanded="copyDropdownOpen === 'articleCount'"
+                    :disabled="copyLoading"
+                    type="button"
+                    @click="toggleCopyDropdown('articleCount')"
+                  >
+                    <span>{{ copyForm.articleCount }}</span>
+                    <span class="custom-select-arrow" aria-hidden="true"></span>
+                  </button>
+                  <div v-if="copyDropdownOpen === 'articleCount'" class="custom-select-menu" role="listbox">
+                    <button
+                      v-for="count in copyArticleCountOptions"
+                      :key="count"
+                      class="custom-select-option"
+                      :class="{ selected: Number(copyForm.articleCount) === count }"
+                      type="button"
+                      role="option"
+                      :aria-selected="Number(copyForm.articleCount) === count"
+                      @mousedown.prevent
+                      @click="selectCopyArticleCount(count)"
+                    >
+                      {{ count }}
+                    </button>
+                  </div>
+                </div>
               </label>
               <label class="select-field">
                 <span>文案长度</span>
-                <select v-model="copyLength" :disabled="copyLoading">
-                  <option>中等长度(200-300字)</option>
-                  <option>短文案(100-200字)</option>
-                  <option>长文案(300-500字)</option>
-                </select>
+                <div
+                  class="custom-select"
+                  :class="{ open: copyDropdownOpen === 'copyLength', disabled: copyLoading }"
+                  @focusout="handleCopyDropdownFocusout"
+                >
+                  <button
+                    class="custom-select-trigger"
+                    :aria-expanded="copyDropdownOpen === 'copyLength'"
+                    :disabled="copyLoading"
+                    type="button"
+                    @click="toggleCopyDropdown('copyLength')"
+                  >
+                    <span>{{ copyLength }}</span>
+                    <span class="custom-select-arrow" aria-hidden="true"></span>
+                  </button>
+                  <div v-if="copyDropdownOpen === 'copyLength'" class="custom-select-menu" role="listbox">
+                    <button
+                      v-for="length in copyLengthOptions"
+                      :key="length"
+                      class="custom-select-option"
+                      :class="{ selected: copyLength === length }"
+                      type="button"
+                      role="option"
+                      :aria-selected="copyLength === length"
+                      @mousedown.prevent
+                      @click="selectCopyLength(length)"
+                    >
+                      {{ length }}
+                    </button>
+                  </div>
+                </div>
               </label>
               <p v-if="copyError" class="error-text">{{ copyError }}</p>
             </div>
@@ -417,11 +485,12 @@
                 <div class="article-editor-head">
                   <button
                     class="ai-cover-button"
-                    :disabled="publishLoading || publishImagePromptLoading"
+                    :class="{ 'is-loading': publishImageAutoGenerating }"
+                    :disabled="publishLoading || publishImagePromptLoading || publishImageAutoGenerating"
                     type="button"
-                    @click="generatePublishImage(0)"
+                    @click="generateAllPublishImages"
                   >
-                    AI自动配图
+                    {{ publishImageAutoGenerating ? '配图中...' : 'AI自动配图' }}
                   </button>
                 </div>
                 <div class="editor-toolbar" aria-label="编辑器工具栏">
@@ -476,7 +545,7 @@
                   </button>
                   <button class="cover-reference-link" type="button" @click="openCoverGuideDialog">
                     封面图参考
-                    <IconGlyph name="help" />
+                    <img class="cover-reference-icon" :src="questionIconUrl" alt="" aria-hidden="true" />
                   </button>
                 </div>
 
@@ -490,13 +559,13 @@
                   />
                 </label>
 
-                <label class="input-field publish-field-block">
+                <label class="input-field publish-field-block article-summary-field">
                   <span>摘要</span>
                   <textarea
                     v-model="publishDraft.summary"
                     :disabled="publishLoading"
                     placeholder="请输入摘要"
-                    rows="3"
+                    rows="1"
                   ></textarea>
                 </label>
 
@@ -510,31 +579,7 @@
                   />
                 </label>
 
-                <div class="input-field tag-field publish-field-block">
-                  <span>标签</span>
-                  <div class="tag-row">
-                    <span v-for="tag in publishDraft.tags" :key="tag" class="tag-pill">
-                      <span class="tag-text">{{ tag }}</span>
-                      <button
-                        class="tag-remove-button"
-                        type="button"
-                        :aria-label="`删除标签 ${tag}`"
-                        @click.stop="removePublishTag(tag)"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  </div>
-                  <input
-                    v-model="tagInput"
-                    :disabled="publishLoading"
-                    type="text"
-                    placeholder="添加新标签，按回车确认..."
-                    @keydown.enter="handlePublishTagEnter"
-                  />
-                </div>
-
-                <fieldset class="publish-platform-list">
+                <fieldset class="publish-platform-list article-platform-list">
                   <legend>发布平台</legend>
                   <label
                     v-for="(account, index) in publishAccountsForDisplay"
@@ -545,8 +590,9 @@
                       failed: !isPublishableXhsAccount(account)
                     }"
                   >
-                    <span class="publish-platform-logo platform-wechat">
-                      <IconGlyph name="message" />
+                    <span class="publish-wechat-avatar" aria-hidden="true">
+                      <span class="wechat-bubble wechat-bubble-main"></span>
+                      <span class="wechat-bubble wechat-bubble-sub"></span>
                     </span>
                     <span>
                       <strong>{{ getPublishAccountName(account, index) }}</strong>
@@ -560,6 +606,9 @@
                       :value="account.id"
                       type="checkbox"
                     />
+                    <span class="publish-platform-checkmark" aria-hidden="true">
+                      <IconGlyph name="check" />
+                    </span>
                   </label>
                   <p v-if="!publishAccountsForDisplay.length" class="publish-platform-empty">
                     暂无可发布账号
@@ -581,25 +630,36 @@
           <section v-else class="publish-workbench publish-image-workbench">
             <div class="publish-image-main">
               <article class="image-edit-card">
+                <input
+                  ref="publishImageFileInputRef"
+                  class="visually-hidden-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  @change="handlePublishImageFileChange"
+                />
                 <header>
                   <h2>图片编辑</h2>
                   <button
                     class="ai-cover-button"
-                    :disabled="publishLoading || publishImagePromptLoading"
+                    :class="{ 'is-loading': publishImageAutoGenerating }"
+                    :disabled="publishLoading || publishImagePromptLoading || publishImageAutoGenerating"
                     type="button"
-                    @click="generatePublishImage(0)"
+                    @click="generateAllPublishImages"
                   >
-                    AI自动配图
+                    {{ publishImageAutoGenerating ? '配图中...' : 'AI自动配图' }}
                   </button>
                 </header>
                 <div class="image-edit-strip" aria-label="图文图片编辑">
                   <button
                     class="image-add-tile"
-                    :disabled="publishLoading || publishImagePromptLoading"
+                    :disabled="!canUploadPublishImage"
                     type="button"
-                    @click="generatePublishImage(0)"
+                    aria-label="上传图片"
+                    title="上传图片"
+                    @click="choosePublishImageUpload()"
                   >
-                    <span>+</span>
+                    <IconGlyph name="upload" />
                   </button>
                   <figure
                     v-for="slot in publishImageSlots"
@@ -607,18 +667,44 @@
                     class="image-edit-thumb"
                     :class="`status-${slot.status}`"
                   >
-                    <button
-                      :disabled="publishLoading || publishImagePromptLoading || slot.status === 'generating'"
-                      type="button"
-                      @click="generatePublishImage(slot.index)"
-                    >
+                    <div class="image-thumb-preview">
                       <img v-if="slot.status === 'ready' && slot.imageUrl" :src="slot.imageUrl" :alt="slot.name" />
                       <span v-else-if="slot.status === 'generating'" class="image-thumb-skeleton" aria-hidden="true"></span>
                       <span v-else class="image-thumb-placeholder">
                         <IconGlyph name="image" />
-                        <small>{{ slot.status === 'failed' ? '重试' : `图片${slot.index + 1}` }}</small>
+                        <small>{{ slot.status === 'failed' ? '重试' : `${slot.index + 1}` }}</small>
                       </span>
-                    </button>
+                      <span v-if="slot.status === 'ready'" class="image-source-badge">
+                        {{ slot.source === 'upload' ? '上传' : 'AI' }}
+                      </span>
+                      <div class="image-thumb-actions">
+                        <button
+                          class="image-thumb-action"
+                          :disabled="publishLoading || publishImageAutoGenerating || slot.status === 'generating'"
+                          type="button"
+                          :aria-label="`上传或替换图片${slot.index + 1}`"
+                          title="上传/替换"
+                          @click="choosePublishImageUpload(slot.index)"
+                        >
+                          <IconGlyph name="upload" />
+                        </button>
+                        <button
+                          class="image-thumb-action"
+                          :disabled="
+                            publishLoading ||
+                            publishImagePromptLoading ||
+                            publishImageAutoGenerating ||
+                            slot.status === 'generating'
+                          "
+                          type="button"
+                          :aria-label="`重新生成图片${slot.index + 1}`"
+                          title="重新生成"
+                          @click="generatePublishImage(slot.index)"
+                        >
+                          <IconGlyph name="refresh" />
+                        </button>
+                      </div>
+                    </div>
                     <figcaption v-if="slot.status === 'failed'">{{ slot.error }}</figcaption>
                   </figure>
                 </div>
@@ -681,8 +767,24 @@
                       failed: !isPublishableXhsAccount(account)
                     }"
                   >
-                    <span class="publish-platform-logo platform-xhs">
-                      <span>小红书</span>
+                    <span
+                      class="publish-account-avatar"
+                      :class="[account.avatarClass, { 'has-image': account.visibleAvatarUrl }]"
+                    >
+                      <img
+                        v-if="account.visibleAvatarUrl"
+                        :src="account.visibleAvatarUrl"
+                        :alt="`${account.displayName}头像`"
+                        referrerpolicy="no-referrer"
+                        @error="markAvatarAsBroken(account.id)"
+                      />
+                      <span v-else class="account-avatar-fallback">{{ account.initial }}</span>
+                      <img
+                        v-if="account.status === 'saved'"
+                        class="xhs-avatar-badge"
+                        :src="xiaohongshuLogoUrl"
+                        alt="小红书"
+                      />
                     </span>
                     <span>
                       <strong>{{ getPublishAccountName(account, index) }}</strong>
@@ -696,6 +798,9 @@
                       :value="account.id"
                       type="checkbox"
                     />
+                    <span class="publish-platform-checkmark" aria-hidden="true">
+                      <IconGlyph name="check" />
+                    </span>
                   </label>
                   <p v-if="!publishAccountsForDisplay.length" class="publish-platform-empty">
                     暂无可发布账号
@@ -880,12 +985,21 @@ import { useRoute, useRouter } from 'vue-router'
 import SettingsDialog from '@components/SettingsDialog.vue'
 import xiaohongshuLogoUrl from '../../../../assetes/xiaohongshu.png'
 import brandLogoUrl from '../../../../logo/名称+小字.svg'
+import accountManageIconUrl from '../../../../svgs/账号管理.svg'
+import helpIconUrl from '../../../../svgs/帮助.svg'
+import publishIconUrl from '../../../../svgs/发布.svg'
+import keywordIconUrl from '../../../../svgs/关键词.svg'
+import questionIconUrl from '../../../../svgs/问号.svg'
+import settingsIconUrl from '../../../../svgs/设置.svg'
+import videoIconUrl from '../../../../svgs/视频03-L.svg'
+import copywritingIconUrl from '../../../../svgs/文案.svg'
 import {
   createImageGenerationTask,
   generateCopywriting,
   generatePublishImagePrompts,
   generateSeoKeywords,
   getImageGenerationTask,
+  type CopyLength,
   type CopywritingItem,
   type ImageGenerationStatusResponse,
   type PublishImagePromptItem,
@@ -937,10 +1051,13 @@ type SeoEntryRequest = {
 }
 
 type CopyEntryRequest = {
+  business: string
+  features: string
   keyword: string
   keywordOccurrences: number
   articleCount: number
   platforms: string[]
+  copyLength: CopyLength
 }
 
 type SeoGenerationEntry = {
@@ -970,6 +1087,7 @@ type CopyGenerationEntry = {
 type GenerationEntry = SeoGenerationEntry | CopyGenerationEntry
 type HistoryType = GenerationEntry['type']
 type PublishMode = 'article' | 'image'
+type CopyDropdownKey = 'articleCount' | 'copyLength'
 
 type ChatSession = {
   id: string
@@ -991,7 +1109,7 @@ type SidebarNavItem = {
   id: string
   page?: PrimaryNavPage
   label: string
-  icon: IconName
+  iconUrl: string
 }
 
 type XiaohongshuAccountStatus = 'pending' | 'saved'
@@ -1038,14 +1156,19 @@ type XiaohongshuAccountView = XiaohongshuAccount & {
 }
 
 type PublishImageSlotStatus = 'idle' | 'generating' | 'ready' | 'failed'
+type PublishImageSlotSource = '' | 'ai' | 'upload'
+type PublishImageFile = File & { path?: string }
 
 type PublishImageSlot = {
   id: string
   index: number
   status: PublishImageSlotStatus
+  source: PublishImageSlotSource
   promptId: string
   name: string
   imageUrl: string
+  publishPath: string
+  objectUrl: string
   promptDescription: string
   keywords: string[]
   sourceKey: string
@@ -1072,7 +1195,10 @@ const route = useRoute()
 const router = useRouter()
 const settingsVisible = ref(false)
 const trendQuery = ref('')
-const copyLength = ref('中等长度(200-300字)')
+const copyArticleCountOptions = [1, 3, 5, 8]
+const copyLengthOptions: CopyLength[] = ['短', '中', '长']
+const copyLength = ref<CopyLength>('中')
+const copyDropdownOpen = ref<CopyDropdownKey | ''>('')
 const sessions = ref<ChatSession[]>(loadSessions())
 const activeSessionId = ref(ensureInitialSessionId(sessions.value))
 const xiaohongshuWebviewRef = ref<XiaohongshuWebviewElement | null>(null)
@@ -1136,10 +1262,10 @@ const routeByPage: Record<PageKey, string> = {
 }
 
 const primaryNav: SidebarNavItem[] = [
-  { id: 'seo', page: 'seo', label: '关键词生成', icon: 'shapes' },
-  { id: 'copywriting', page: 'copywriting', label: '文案生成', icon: 'document' },
-  { id: 'video', label: '视频脚本生成', icon: 'video' },
-  { id: 'publish', page: 'publish', label: '发布中心', icon: 'send' }
+  { id: 'seo', page: 'seo', label: '关键词生成', iconUrl: keywordIconUrl },
+  { id: 'copywriting', page: 'copywriting', label: '文案生成', iconUrl: copywritingIconUrl },
+  { id: 'video', label: '视频脚本生成', iconUrl: videoIconUrl },
+  { id: 'publish', page: 'publish', label: '发布中心', iconUrl: publishIconUrl }
 ]
 
 const iconPaths: Record<IconName, string[]> = {
@@ -1238,8 +1364,8 @@ const hotContent = [
   { title: '如何利用AI提升工作效率？', views: '8.5w 阅读' }
 ]
 const competitors = [
-  { short: 'A', name: '品牌 A', value: 45, color: '#0058be' },
-  { short: 'B', name: '品牌 B', value: 30, color: '#526069' }
+  { short: 'A', name: '品牌 A', value: 45, color: '#2563eb' },
+  { short: 'B', name: '品牌 B', value: 30, color: '#64748b' }
 ]
 const audienceTags = ['25-34岁', '科技爱好者', '营销从业者', '高消费力']
 const marketingAdvice = [
@@ -1262,6 +1388,8 @@ const displayedSeoResults = computed(() => seoResults.value)
 
 const socialPlatforms = ['小红书', '公众号']
 const copyForm = reactive({
+  business: '',
+  features: '',
   keyword: '',
   keywordOccurrences: 3,
   articleCount: 3,
@@ -1297,17 +1425,24 @@ const publishImageSlots = ref<PublishImageSlot[]>(createPublishImageSlots())
 const publishImagePrompts = ref<PublishImagePromptItem[]>([])
 const publishImagePromptSourceKey = ref('')
 const publishImagePromptLoading = ref(false)
+const publishImageAutoGenerating = ref(false)
+const publishImageFileInputRef = ref<HTMLInputElement | null>(null)
+const publishImageUploadTargetIndex = ref<number | null>(null)
 const publishCoverFileInputRef = ref<HTMLInputElement | null>(null)
 const publishCoverPreviewUrl = ref('')
 const helpDialogOpen = ref(false)
 const coverGuideDialogOpen = ref(false)
 const coverUploadAfterGuide = ref(false)
 const generatedPublishImages = computed(() =>
-  publishImageSlots.value.filter(
-    (slot) => slot.status === 'ready' && slot.imageUrl && slot.sourceKey === getPublishImageSourceKey()
-  )
+  publishImageSlots.value.filter((slot) => isPublishImageSlotReadyForPublish(slot))
 )
 const articleInlineImageUrl = computed(() => generatedPublishImages.value[0]?.imageUrl || '')
+const canUploadPublishImage = computed(
+  () =>
+    !publishLoading.value &&
+    !publishImageAutoGenerating.value &&
+    publishImageSlots.value.some((slot) => slot.status !== 'ready' && slot.status !== 'generating')
+)
 
 const accounts = computed<XiaohongshuAccountView[]>(() =>
   xhsAccounts.value.map((account, index) => ({
@@ -1465,10 +1600,13 @@ function hydrateCopyEntry(entry: CopyGenerationEntry) {
   const articleCount = Number(entry.request?.articleCount)
   const restoredPlatform = normalizeCopyPlatform(entry.request?.platforms?.[0] || '')
 
+  copyForm.business = entry.request?.business || ''
+  copyForm.features = entry.request?.features || ''
   copyForm.keyword = entry.request?.keyword || ''
   copyForm.keywordOccurrences = Number.isFinite(keywordOccurrences) ? keywordOccurrences : 3
   copyForm.articleCount = Number.isFinite(articleCount) && articleCount > 0 ? articleCount : 3
   copyForm.platform = restoredPlatform || '小红书'
+  copyLength.value = normalizeCopyLength(entry.request?.copyLength)
   copyResults.value = Array.isArray(entry.response?.items) ? entry.response.items : []
   copyModel.value = entry.response?.model || ''
   copyError.value = ''
@@ -1492,6 +1630,39 @@ function getCopyPlatformLabel(item: CopywritingItem) {
 
 function getCopyPlatformClass(item: CopywritingItem) {
   return getCopyPlatformLabel(item) === '公众号' ? 'platform-wechat' : 'platform-xhs'
+}
+
+function normalizeCopyLength(value: unknown): CopyLength {
+  const text = String(value || '').trim()
+  if (text.includes('短')) return '短'
+  if (text.includes('长')) return '长'
+  return '中'
+}
+
+function toggleCopyDropdown(dropdown: CopyDropdownKey) {
+  if (copyLoading.value) return
+  copyDropdownOpen.value = copyDropdownOpen.value === dropdown ? '' : dropdown
+}
+
+function closeCopyDropdown() {
+  copyDropdownOpen.value = ''
+}
+
+function handleCopyDropdownFocusout(event: FocusEvent) {
+  const target = event.currentTarget
+  const nextTarget = event.relatedTarget
+  if (target instanceof Node && nextTarget instanceof Node && target.contains(nextTarget)) return
+  closeCopyDropdown()
+}
+
+function selectCopyArticleCount(count: number) {
+  copyForm.articleCount = count
+  closeCopyDropdown()
+}
+
+function selectCopyLength(length: CopyLength) {
+  copyLength.value = length
+  closeCopyDropdown()
 }
 
 function getCopyBodyContent(item: CopywritingItem) {
@@ -1533,10 +1704,12 @@ function getHistoryDrawerTitle(type: HistoryType) {
 }
 
 async function preparePublishFromCopy(item: CopywritingItem) {
+  const targetPublishMode: PublishMode = getCopyPlatformLabel(item) === '公众号' ? 'article' : 'image'
   const title = getCopyPublishTitle(item)
   const content = stripPublishTagsFromCopyContent(item.content)
-  const tags = derivePublishTagsFromCopy(item)
+  const tags = targetPublishMode === 'image' ? derivePublishTagsFromCopy(item) : []
 
+  publishMode.value = targetPublishMode
   publishDraft.title = title
   publishDraft.content = content
   publishDraft.summary = truncatePlainText(content.replace(/\s+/g, ' '), 80)
@@ -1547,7 +1720,7 @@ async function preparePublishFromCopy(item: CopywritingItem) {
   publishSuccess.value = ''
   publishImagePrompts.value = []
   publishImagePromptSourceKey.value = ''
-  publishImageSlots.value = createPublishImageSlots()
+  resetPublishImageSlots()
 
   await router.push(routeByPage.publish)
   await nextTick()
@@ -1656,19 +1829,26 @@ function handlePublishTagEnter(event: KeyboardEvent) {
   addPublishTag()
 }
 
-function createPublishImageSlots(): PublishImageSlot[] {
-  return Array.from({ length: PUBLISH_IMAGE_SLOT_COUNT }, (_, index) => ({
+function createPublishImageSlot(index: number): PublishImageSlot {
+  return {
     id: `publish-image-slot-${index}`,
     index,
     status: 'idle',
+    source: '',
     promptId: '',
-    name: `图片 ${index + 1}`,
+    name: `${index + 1}`,
     imageUrl: '',
+    publishPath: '',
+    objectUrl: '',
     promptDescription: '',
     keywords: [],
     sourceKey: '',
     error: ''
-  }))
+  }
+}
+
+function createPublishImageSlots(): PublishImageSlot[] {
+  return Array.from({ length: PUBLISH_IMAGE_SLOT_COUNT }, (_, index) => createPublishImageSlot(index))
 }
 
 function collectPublishCopyCandidates(content: string) {
@@ -1728,32 +1908,107 @@ function cleanKeywordCandidate(value: string) {
   return truncatePlainText(keyword, 18)
 }
 
-async function generatePublishImage(slotIndex: number) {
-  if (publishLoading.value) return
+function assertPublishImagePromptPrerequisites() {
+  if (!publishDraft.title.trim()) throw new Error('请先填写标题，再生成配图描述词')
+  if (!publishDraft.content.trim()) throw new Error('请先填写正文，再生成配图描述词')
+}
+
+function markPublishImageSlotGenerating(slotIndex: number, sourceKey: string) {
+  setPublishImageSlot(slotIndex, {
+    status: 'generating',
+    source: 'ai',
+    promptId: '',
+    imageUrl: '',
+    publishPath: '',
+    objectUrl: '',
+    sourceKey,
+    error: '',
+    name: `${slotIndex + 1}`
+  })
+}
+
+function failGeneratingPublishImageSlots(message: string) {
+  publishImageSlots.value
+    .filter((slot) => slot.status === 'generating' && slot.source === 'ai')
+    .forEach((slot) => {
+      setPublishImageSlot(slot.index, {
+        status: 'failed',
+        error: message,
+        imageUrl: '',
+        publishPath: '',
+        objectUrl: ''
+      })
+    })
+}
+
+async function generateAllPublishImages() {
+  if (publishLoading.value || publishImageAutoGenerating.value) return
+
+  publishError.value = ''
+  publishSuccess.value = ''
+  const sourceKey = getPublishImageSourceKey()
+
+  try {
+    assertPublishImagePromptPrerequisites()
+    const targetIndexes = publishImageSlots.value
+      .filter((slot) => slot.status !== 'ready')
+      .map((slot) => slot.index)
+
+    if (!targetIndexes.length) return
+
+    publishImageAutoGenerating.value = true
+    for (const slotIndex of targetIndexes) {
+      markPublishImageSlotGenerating(slotIndex, sourceKey)
+    }
+
+    await ensurePublishImagePrompts()
+    for (const slotIndex of targetIndexes) {
+      await generatePublishImage(slotIndex, { reuseGeneratingSlot: true })
+    }
+  } catch (error) {
+    const message = getErrorMessage(error)
+    publishError.value = message
+    failGeneratingPublishImageSlots(message)
+  } finally {
+    publishImageAutoGenerating.value = false
+  }
+}
+
+async function generatePublishImage(
+  slotIndex: number,
+  options: { reuseGeneratingSlot?: boolean } = {}
+): Promise<boolean> {
+  if (publishLoading.value) return false
 
   const slot = publishImageSlots.value[slotIndex]
-  if (!slot || slot.status === 'generating') return
+  if (!slot || (slot.status === 'generating' && !options.reuseGeneratingSlot)) return false
 
   publishError.value = ''
   publishSuccess.value = ''
 
   try {
+    assertPublishImagePromptPrerequisites()
+    const sourceKey = getPublishImageSourceKey()
+    markPublishImageSlotGenerating(slotIndex, sourceKey)
+
     const imagePrompts = await ensurePublishImagePrompts()
     const imagePrompt = imagePrompts[slotIndex]
     if (!imagePrompt?.description) {
       throw new Error(`第 ${slotIndex + 1} 张配图缺少文生图描述词`)
     }
 
-    const sourceKey = getPublishImageSourceKey()
     setPublishImageSlot(slotIndex, {
       status: 'generating',
+      source: 'ai',
       promptId: '',
       imageUrl: '',
+      publishPath: '',
+      objectUrl: '',
       promptDescription: imagePrompt.description,
       keywords: imagePrompt.keywords,
       sourceKey,
       error: '',
-      name: `图片 ${slotIndex + 1}`
+      name: `${slotIndex + 1}`
     })
 
     const task = await createImageGenerationTask({
@@ -1771,26 +2026,30 @@ async function generatePublishImage(slotIndex: number) {
     if (!result.image?.url) {
       throw new Error('图片生成完成但未返回预览地址')
     }
-    if (sourceKey !== getPublishImageSourceKey()) {
-      throw new Error('文案内容已变化，请重新生成配图')
-    }
-
     setPublishImageSlot(slotIndex, {
       status: 'ready',
+      source: 'ai',
       promptId: result.prompt_id,
       imageUrl: result.image.url,
-      name: result.image.filename || `图片 ${slotIndex + 1}`,
+      publishPath: result.image.url,
+      objectUrl: '',
+      name: result.image.filename || `${slotIndex + 1}`,
       promptDescription: imagePrompt.description,
       keywords: imagePrompt.keywords,
       sourceKey,
       error: ''
     })
+    return true
   } catch (error) {
     setPublishImageSlot(slotIndex, {
       status: 'failed',
+      source: 'ai',
       error: getErrorMessage(error),
-      imageUrl: ''
+      imageUrl: '',
+      publishPath: '',
+      objectUrl: ''
     })
+    return false
   }
 }
 
@@ -1804,7 +2063,6 @@ async function ensurePublishImagePrompts() {
   }
 
   publishImagePromptLoading.value = true
-  publishImageSlots.value = createPublishImageSlots()
 
   try {
     const response = await generatePublishImagePrompts({
@@ -1819,19 +2077,102 @@ async function ensurePublishImagePrompts() {
     const items = response.items.slice(0, PUBLISH_IMAGE_SLOT_COUNT)
     publishImagePrompts.value = items
     publishImagePromptSourceKey.value = sourceKey
-    publishImageSlots.value = createPublishImageSlots().map((slot) => {
+    publishImageSlots.value = publishImageSlots.value.map((slot) => {
       const item = items[slot.index]
       return {
         ...slot,
         promptDescription: item.description,
-        keywords: item.keywords,
-        sourceKey
+        keywords: item.keywords
       }
     })
     return items
   } finally {
     publishImagePromptLoading.value = false
   }
+}
+
+function choosePublishImageUpload(slotIndex?: number) {
+  if (publishLoading.value || publishImageAutoGenerating.value) return
+
+  const targetIndex = typeof slotIndex === 'number' ? slotIndex : getNextAvailablePublishImageSlotIndex()
+  if (targetIndex < 0) {
+    publishError.value = '图片位置已满，请选择具体图片替换'
+    publishSuccess.value = ''
+    return
+  }
+
+  publishImageUploadTargetIndex.value = targetIndex
+  publishImageFileInputRef.value?.click()
+}
+
+async function handlePublishImageFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? []).filter(isPublishImageUploadFile)
+  input.value = ''
+
+  if (!files.length) return
+
+  publishError.value = ''
+  publishSuccess.value = ''
+
+  try {
+    let targetIndex = publishImageUploadTargetIndex.value ?? getNextAvailablePublishImageSlotIndex()
+    for (const file of files) {
+      if (targetIndex < 0) break
+
+      const filePath = getPublishImageFilePath(file)
+      if (!filePath) {
+        throw new Error('无法读取本地图片路径，请重新选择图片')
+      }
+
+      const previewUrl = await readPublishImagePreviewUrl(file)
+      setPublishImageSlot(targetIndex, {
+        status: 'ready',
+        source: 'upload',
+        promptId: '',
+        name: file.name || `${targetIndex + 1}`,
+        imageUrl: previewUrl,
+        publishPath: filePath,
+        objectUrl: '',
+        sourceKey: '',
+        error: ''
+      })
+      targetIndex = getNextAvailablePublishImageSlotIndex(targetIndex + 1)
+    }
+  } catch (error) {
+    publishError.value = getErrorMessage(error)
+  } finally {
+    publishImageUploadTargetIndex.value = null
+  }
+}
+
+function isPublishImageUploadFile(file: File) {
+  return file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name)
+}
+
+function readPublishImagePreviewUrl(file: File) {
+  return new Promise<string>((resolvePreview, rejectPreview) => {
+    const reader = new FileReader()
+    reader.onerror = () => rejectPreview(new Error('图片预览读取失败，请重新选择图片'))
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolvePreview(reader.result)
+        return
+      }
+      rejectPreview(new Error('图片预览读取失败，请重新选择图片'))
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function getPublishImageFilePath(file: File) {
+  return (file as PublishImageFile).path || ''
+}
+
+function getNextAvailablePublishImageSlotIndex(startIndex = 0) {
+  return publishImageSlots.value.findIndex(
+    (slot) => slot.index >= startIndex && slot.status !== 'ready' && slot.status !== 'generating'
+  )
 }
 
 async function waitForPublishImage(promptId: string): Promise<ImageGenerationStatusResponse> {
@@ -1851,14 +2192,39 @@ async function waitForPublishImage(promptId: string): Promise<ImageGenerationSta
 }
 
 function setPublishImageSlot(slotIndex: number, patch: Partial<PublishImageSlot>) {
-  publishImageSlots.value = publishImageSlots.value.map((slot) => (slot.index === slotIndex ? { ...slot, ...patch } : slot))
+  publishImageSlots.value = publishImageSlots.value.map((slot) => {
+    if (slot.index !== slotIndex) return slot
+    if (slot.objectUrl && patch.objectUrl !== undefined && patch.objectUrl !== slot.objectUrl) {
+      URL.revokeObjectURL(slot.objectUrl)
+    }
+    return { ...slot, ...patch }
+  })
+}
+
+function resetPublishImageSlots(slots: PublishImageSlot[] = createPublishImageSlots()) {
+  revokePublishImageObjectUrls(publishImageSlots.value)
+  publishImageSlots.value = slots
+}
+
+function revokePublishImageObjectUrls(slots: PublishImageSlot[]) {
+  for (const slot of slots) {
+    if (slot.objectUrl) {
+      URL.revokeObjectURL(slot.objectUrl)
+    }
+  }
+}
+
+function isPublishImageSlotReadyForPublish(slot: PublishImageSlot) {
+  if (slot.status !== 'ready' || !slot.imageUrl || !slot.publishPath) return false
+  if (slot.source === 'upload') return true
+  return slot.source === 'ai'
 }
 
 function getPublishImageSourceKey() {
   return JSON.stringify({
     title: publishDraft.title.trim(),
     content: publishDraft.content.trim(),
-    tags: publishDraft.tags.map((tag) => tag.trim()).filter(Boolean)
+    tags: publishMode.value === 'image' ? publishDraft.tags.map((tag) => tag.trim()).filter(Boolean) : []
   })
 }
 
@@ -1871,7 +2237,7 @@ function delay(ms: number) {
 function validatePublishDraft() {
   if (!publishDraft.title.trim()) return '请输入标题'
   if (!publishDraft.content.trim()) return '请输入正文'
-  if (generatedPublishImages.value.length < MIN_PUBLISH_IMAGE_COUNT) return '请至少生成 1 张配图'
+  if (generatedPublishImages.value.length < MIN_PUBLISH_IMAGE_COUNT) return '请至少添加 1 张图片'
   if (!publishDraft.platforms.length) return '请选择发布账号'
   if (publishDraft.schedule !== 'now') return '当前 RPA 图文发布仅支持立即发布'
   return ''
@@ -1892,8 +2258,8 @@ async function submitPublish() {
   try {
     const results: Array<{ status: 'published' | 'failed'; message?: string }> = []
     const accountIds = publishDraft.platforms.map((accountId) => String(accountId))
-    const tags = publishDraft.tags.map((tag) => String(tag))
-    const imageUrls = generatedPublishImages.value.map((image) => String(image.imageUrl))
+    const tags = publishMode.value === 'image' ? publishDraft.tags.map((tag) => String(tag)) : []
+    const imageUrls = generatedPublishImages.value.map((image) => String(image.publishPath))
     const title = publishDraft.title.trim()
     const content = publishDraft.content.trim()
 
@@ -2464,6 +2830,8 @@ function resetSeoResults() {
 
 async function prepareCopyFromKeyword(keyword: string) {
   copyForm.keyword = keyword
+  copyForm.business = seoForm.business.trim()
+  copyForm.features = seoForm.features.trim()
   copyForm.keywordOccurrences = Math.max(copyForm.keywordOccurrences, 1)
   selectedCopyEntryId.value = ''
   await router.push(routeByPage.copywriting)
@@ -2480,18 +2848,24 @@ async function submitCopy() {
   copyLoading.value = true
   copyError.value = ''
   const requestPayload: CopyEntryRequest = {
+    business: copyForm.business.trim(),
+    features: copyForm.features.trim(),
     keyword: copyForm.keyword.trim(),
     keywordOccurrences: Number(copyForm.keywordOccurrences),
     articleCount: Number(copyForm.articleCount),
-    platforms: [copyForm.platform]
+    platforms: [copyForm.platform],
+    copyLength: copyLength.value
   }
 
   try {
     const response = await generateCopywriting({
+      business_description: requestPayload.business,
+      product_features: requestPayload.features,
       keyword: requestPayload.keyword,
       keyword_repeat_count: requestPayload.keywordOccurrences,
       article_count: requestPayload.articleCount,
-      platform_styles: requestPayload.platforms
+      platform_styles: requestPayload.platforms,
+      copy_length: requestPayload.copyLength
     })
     copyResults.value = response.items
     copyModel.value = response.model
@@ -2522,8 +2896,11 @@ function validateSeoForm() {
 }
 
 function validateCopyForm() {
+  if (!copyForm.business.trim()) return '请输入业务描述'
+  if (!copyForm.features.trim()) return '请输入产品特点'
   if (!copyForm.keyword.trim()) return '请输入关键词'
   if (!socialPlatforms.includes(copyForm.platform)) return '请选择小红书或公众号'
+  if (!copyLengthOptions.includes(copyLength.value)) return '请选择文案长度'
   if (!Number.isFinite(Number(copyForm.articleCount)) || copyForm.articleCount < 1) {
     return '生成篇数需大于 0'
   }
@@ -2616,14 +2993,12 @@ watch(
   (sourceKey) => {
     const hasImagePromptState =
       Boolean(publishImagePromptSourceKey.value) ||
-      publishImagePrompts.value.length > 0 ||
-      publishImageSlots.value.some((slot) => slot.status !== 'idle' || Boolean(slot.promptDescription))
+      publishImagePrompts.value.length > 0
 
     if (!hasImagePromptState || publishImagePromptSourceKey.value === sourceKey) return
 
     publishImagePrompts.value = []
     publishImagePromptSourceKey.value = ''
-    publishImageSlots.value = createPublishImageSlots()
   }
 )
 
@@ -2654,6 +3029,7 @@ onBeforeUnmount(() => {
   if (publishCoverPreviewUrl.value) {
     URL.revokeObjectURL(publishCoverPreviewUrl.value)
   }
+  revokePublishImageObjectUrls(publishImageSlots.value)
 })
 </script>
 
@@ -2668,9 +3044,10 @@ onBeforeUnmount(() => {
 
 :global(body) {
   overflow: hidden;
-  background: #f8f9fa;
-  color: #191c1d;
+  background: #f8f9ff;
+  color: #0b1c30;
   font-family:
+    'Hanken Grotesk',
     Inter,
     'Microsoft YaHei',
     'PingFang SC',
@@ -2693,25 +3070,30 @@ onBeforeUnmount(() => {
 }
 
 .suite-shell {
-  --primary: #0058be;
-  --primary-strong: #004d99;
-  --primary-soft: #d6e3ff;
+  --primary: #2563eb;
+  --primary-strong: #004ac6;
+  --primary-hover: #004ac6;
+  --primary-soft: #dbe1ff;
+  --primary-faint: #eff4ff;
+  --action: #fd761a;
+  --action-strong: #9d4300;
   --surface: #ffffff;
-  --surface-low: #f3f4f5;
-  --surface-container: #edeeef;
-  --surface-high: #e7e8e9;
-  --surface-highest: #e1e3e4;
-  --text: #191c1d;
-  --text-muted: #424752;
-  --outline: #c2c6d4;
-  --outline-dark: #727783;
+  --surface-low: #eff4ff;
+  --surface-container: #e5eeff;
+  --surface-high: #dce9ff;
+  --surface-highest: #d3e4fe;
+  --text: #0b1c30;
+  --text-muted: #434655;
+  --outline: #e2e8f0;
+  --outline-dark: #737686;
   --error: #ba1a1a;
-  --success: #005c16;
+  --success: #007e37;
+  --success-soft: #dcfce7;
   display: flex;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #f8f9fa;
+  background: #f8f9ff;
   color: var(--text);
 }
 
@@ -2804,7 +3186,7 @@ onBeforeUnmount(() => {
 }
 
 .nav-item.active {
-  background: #2f7dd2;
+  background: var(--primary);
   color: #ffffff;
   font-weight: 700;
 }
@@ -2817,7 +3199,7 @@ onBeforeUnmount(() => {
   gap: 10px;
   margin-top: auto;
   border-radius: 8px;
-  background: #edf4fb;
+  background: var(--primary-faint);
   color: var(--primary);
   font-weight: 700;
 }
@@ -2881,7 +3263,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  background: #f8f9fa;
+  background: #f8f9ff;
   padding: 30px;
 }
 
@@ -3014,7 +3396,7 @@ onBeforeUnmount(() => {
 
 .card-icon.blue,
 .hero-icon {
-  background: #d6e3ff;
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
@@ -3024,12 +3406,12 @@ onBeforeUnmount(() => {
 }
 
 .card-icon.gray {
-  background: #eef3f6;
-  color: #526069;
+  background: #eff4ff;
+  color: #64748b;
 }
 
 .card-icon.green {
-  background: #d9f1dd;
+  background: var(--success-soft);
   color: var(--success);
 }
 
@@ -3059,8 +3441,8 @@ onBeforeUnmount(() => {
 
 .keyword-pills span.selected,
 .result-tags span {
-  border-color: #a9c7ff;
-  background: #d6e3ff;
+  border-color: #b4c5ff;
+  background: var(--primary-soft);
   color: var(--primary-strong);
 }
 
@@ -3145,7 +3527,7 @@ onBeforeUnmount(() => {
 
 .bar-1 {
   height: 62px;
-  background: #d6e3ff;
+  background: var(--primary-soft);
 }
 
 .bar-2 {
@@ -3155,7 +3537,7 @@ onBeforeUnmount(() => {
 
 .bar-3 {
   height: 82px;
-  background: #a9c7ff;
+  background: #b4c5ff;
 }
 
 .bar-4 {
@@ -3925,6 +4307,12 @@ onBeforeUnmount(() => {
   background: #e5edf7;
 }
 
+.publish-account-avatar .account-avatar-fallback {
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.9), transparent 24%),
+    linear-gradient(135deg, #234f7e, #9fc5e8 48%, #f7d48f);
+}
+
 .publish-account-avatar.avatar-forest .account-avatar-fallback {
   background:
     radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.85), transparent 24%),
@@ -3980,7 +4368,7 @@ onBeforeUnmount(() => {
 
 .suite-content.page-accounts {
   overflow: hidden;
-  background: #f6f8fd;
+  background: #f8f9ff;
   padding: 0;
 }
 
@@ -3989,7 +4377,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   grid-template-rows: auto auto minmax(0, 1fr);
-  background: #f5f7fc;
+  background: #f8f9ff;
 }
 
 .account-strip {
@@ -4033,9 +4421,9 @@ onBeforeUnmount(() => {
 }
 
 .account-chip.active {
-  border-color: #8bb8f2;
-  background: #eaf3ff;
-  box-shadow: inset 3px 0 0 #1d68d8, 0 1px 3px rgba(29, 104, 216, 0.12);
+  border-color: #b4c5ff;
+  background: var(--primary-faint);
+  box-shadow: inset 3px 0 0 var(--primary), 0 1px 3px rgba(37, 99, 235, 0.12);
 }
 
 .account-avatar {
@@ -4134,7 +4522,7 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  background: #f6f8fd;
+  background: #f8f9ff;
   padding: 24px 28px;
 }
 
@@ -4168,8 +4556,8 @@ onBeforeUnmount(() => {
 }
 
 .account-actions .primary-lite {
-  border-color: #1d68d8;
-  background: #1d68d8;
+  border-color: var(--primary);
+  background: var(--primary);
   color: #ffffff;
 }
 
@@ -4427,22 +4815,28 @@ onBeforeUnmount(() => {
 
 /* Reference UI polish translated from stitch_raw_canvas_importer/pages.html */
 .suite-shell {
-  --primary: #6b58ff;
-  --primary-strong: #5140d8;
-  --primary-hover: #5a47e6;
-  --primary-soft: #f0eeff;
-  --surface-low: #f8f9fc;
-  --surface-high: #f4f6fb;
-  --surface-highest: #edf0f6;
-  --text: #1f2937;
-  --text-muted: #6b7280;
-  --outline: #e5e7eb;
-  --outline-dark: #d1d5db;
-  --success: #16a34a;
-  background: #f8f9fc;
+  --primary: #2563eb;
+  --primary-strong: #004ac6;
+  --primary-hover: #004ac6;
+  --primary-soft: #dbe1ff;
+  --primary-faint: #eff4ff;
+  --action: #fd761a;
+  --action-hover: #9d4300;
+  --surface-low: #f8f9ff;
+  --surface-high: #eff4ff;
+  --surface-highest: #d3e4fe;
+  --text: #0b1c30;
+  --text-muted: #434655;
+  --outline: #e2e8f0;
+  --outline-dark: #c3c6d7;
+  --success: #007e37;
+  --success-soft: #dcfce7;
+  background: #f8f9ff;
   color: var(--text);
   font-size: 15px;
   font-family:
+    'Hanken Grotesk',
+    Inter,
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
@@ -4455,7 +4849,7 @@ onBeforeUnmount(() => {
   width: 116px;
   flex-basis: 116px;
   align-items: center;
-  border-right: 1px solid #e5eaf2;
+  border-right: 1px solid var(--outline);
   border-bottom-left-radius: 18px;
   background: #ffffff;
   padding: 16px 0 18px;
@@ -4499,9 +4893,9 @@ onBeforeUnmount(() => {
   min-height: 96px;
   flex-direction: column;
   justify-content: center;
-  gap: 7px;
+  gap: 4px;
   border-radius: 0;
-  color: #657590;
+  color: var(--text-muted);
   padding: 0;
   text-align: center;
   transition: none;
@@ -4509,7 +4903,7 @@ onBeforeUnmount(() => {
 
 .nav-item > span:not(.nav-icon),
 .help-center > span:not(.nav-icon) {
-  color: #657590;
+  color: var(--text-muted);
   font-size: 14.5px;
   font-weight: 500;
   line-height: 21px;
@@ -4517,14 +4911,24 @@ onBeforeUnmount(() => {
 }
 
 .nav-icon {
+  position: relative;
   display: grid;
   width: 68px;
   height: 68px;
   place-items: center;
   border-radius: 20px;
   background: transparent;
-  color: #8a93a2;
+  color: #737686;
   transition: none;
+}
+
+.nav-icon::before {
+  position: absolute;
+  inset: 7px;
+  border-radius: 16px;
+  content: '';
+  opacity: 0;
+  pointer-events: none;
 }
 
 .nav-icon svg {
@@ -4533,10 +4937,20 @@ onBeforeUnmount(() => {
   stroke-width: 2.35;
 }
 
+.nav-icon-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%) invert(49%) sepia(9%) saturate(863%) hue-rotate(178deg) brightness(91%) contrast(88%);
+}
+
 .help-center .nav-icon {
   width: 36px;
   height: 36px;
-  color: #8a93a2;
+  color: #737686;
 }
 
 .help-center .nav-icon svg {
@@ -4544,10 +4958,15 @@ onBeforeUnmount(() => {
   height: 30px;
 }
 
+.help-center .nav-icon-image {
+  width: 30px;
+  height: 30px;
+}
+
 .nav-item:hover,
 .help-center:hover {
   background: transparent;
-  color: #657590;
+  color: var(--text-muted);
 }
 
 .nav-item.active {
@@ -4555,22 +4974,27 @@ onBeforeUnmount(() => {
   min-height: 96px;
   border-radius: 0;
   background: transparent;
-  color: #657590;
+  color: var(--text-muted);
   box-shadow: none;
   font-weight: 500;
 }
 
 .nav-item.active > span:not(.nav-icon) {
-  color: #657590;
+  color: var(--text-muted);
 }
 
 .nav-item.active .nav-icon {
   width: 68px;
   height: 68px;
-  border-radius: 20px;
-  background: #6b58ff;
+  background: transparent;
   color: #ffffff;
-  box-shadow: 0 9px 18px rgba(107, 88, 255, 0.24);
+  box-shadow: none;
+}
+
+.nav-item.active .nav-icon::before {
+  background: var(--primary);
+  box-shadow: 0 7px 14px rgba(37, 99, 235, 0.18);
+  opacity: 1;
 }
 
 .nav-item.active .nav-icon svg {
@@ -4579,28 +5003,34 @@ onBeforeUnmount(() => {
   stroke-width: 2.15;
 }
 
+.nav-item.active .nav-icon-image {
+  width: 28px;
+  height: 28px;
+  filter: brightness(0) invert(1);
+}
+
 .help-center {
   margin-top: auto;
   background: transparent;
-  color: #657590;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
 .suite-main {
-  background: #f8f9fc;
+  background: var(--surface-low);
 }
 
 .suite-header {
   height: 74px;
   flex-basis: 74px;
-  border-bottom-color: #e5e7eb;
+  border-bottom-color: var(--outline);
   padding: 0 30px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .suite-header h1,
 .workspace-header h2 {
-  color: #1f2937;
+  color: var(--text);
   font-size: 21px;
   font-weight: 800;
   line-height: 28px;
@@ -4609,7 +5039,7 @@ onBeforeUnmount(() => {
 .suite-header p,
 .workspace-header p {
   margin: 3px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
   line-height: 20px;
 }
@@ -4630,7 +5060,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #81799f;
+  color: #64748b;
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
@@ -4663,7 +5093,7 @@ onBeforeUnmount(() => {
 }
 
 .suite-content {
-  background: #f8f9fc;
+  background: var(--surface-low);
   padding: 24px;
 }
 
@@ -4683,7 +5113,7 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--outline);
   background: #ffffff;
 }
 
@@ -4692,7 +5122,7 @@ onBeforeUnmount(() => {
   min-height: 96px;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid var(--outline);
   padding: 0 24px;
 }
 
@@ -4709,14 +5139,14 @@ onBeforeUnmount(() => {
 
 .panel-title h1 {
   margin: 0;
-  color: #111827;
+  color: var(--text);
   font-size: 21px;
   font-weight: 800;
 }
 
 .panel-title p {
   margin: 4px 0 0;
-  color: #8a90a1;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -4735,7 +5165,7 @@ onBeforeUnmount(() => {
 }
 
 .panel-action-bar {
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid var(--outline);
   background: #ffffff;
   padding: 16px 24px 22px;
 }
@@ -4753,7 +5183,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--outline);
   background: #ffffff;
   padding: 0 32px;
 }
@@ -4773,7 +5203,7 @@ onBeforeUnmount(() => {
 .image-upload-card,
 .editor-card,
 .publish-settings {
-  border-color: #edf0f5;
+  border-color: var(--outline);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -4809,9 +5239,9 @@ onBeforeUnmount(() => {
 
 .result-tags span {
   min-height: 34px;
-  border-color: #93b7ea;
-  background: #eff6ff;
-  color: #374151;
+  border-color: #b4c5ff;
+  background: var(--primary-faint);
+  color: var(--primary-strong);
   font-size: 15px;
   font-weight: 600;
   padding: 5px 16px;
@@ -4824,18 +5254,18 @@ onBeforeUnmount(() => {
 
 .suite-table th,
 .suite-table td {
-  border-bottom-color: #edf0f5;
+  border-bottom-color: var(--outline);
   padding: 13px 0;
   font-size: 15px;
 }
 
 .suite-table th {
-  color: #111827;
+  color: var(--text);
   font-size: 15px;
 }
 
 .link-action {
-  color: #2079c1;
+  color: var(--primary);
   font-weight: 700;
 }
 
@@ -4861,9 +5291,9 @@ onBeforeUnmount(() => {
 .input-field input,
 .input-field textarea,
 .select-field select {
-  border-color: #e5e7eb;
+  border-color: var(--outline);
   border-radius: 8px;
-  color: #1f2937;
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -4871,6 +5301,17 @@ onBeforeUnmount(() => {
 .select-field select {
   height: 44px;
   padding: 0 14px;
+}
+
+.input-field input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.input-field input[type='number']::-webkit-inner-spin-button,
+.input-field input[type='number']::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
 }
 
 .input-field textarea {
@@ -4882,7 +5323,7 @@ onBeforeUnmount(() => {
 .input-field textarea:focus,
 .select-field select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(107, 88, 255, 0.13);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .count-field em {
@@ -4897,7 +5338,7 @@ onBeforeUnmount(() => {
 .publish-action {
   background: var(--primary);
   color: #ffffff;
-  box-shadow: 0 8px 18px rgba(107, 88, 255, 0.18);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
 }
 
 .primary-action:hover,
@@ -4910,6 +5351,15 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   font-size: 16px;
   font-weight: 800;
+}
+
+.publish-action {
+  background: var(--action);
+  box-shadow: 0 8px 18px rgba(253, 118, 26, 0.2);
+}
+
+.publish-action:hover {
+  background: var(--action-hover);
 }
 
 .ghost-button {
@@ -4976,7 +5426,7 @@ onBeforeUnmount(() => {
 
 .copy-platform-field {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   margin: 0 0 20px;
   border: 0;
   padding: 0;
@@ -4993,9 +5443,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
-  border: 1px solid #edf0f6;
+  border: 1px solid var(--outline);
   border-radius: 12px;
-  background: #f7f8fb;
+  background: var(--primary-faint);
   padding: 4px;
 }
 
@@ -5016,7 +5466,7 @@ onBeforeUnmount(() => {
 .copy-platform-options label.checked {
   background: var(--primary);
   color: #ffffff;
-  box-shadow: 0 7px 14px rgba(107, 88, 255, 0.22);
+  box-shadow: 0 7px 14px rgba(37, 99, 235, 0.18);
 }
 
 .copy-platform-options input {
@@ -5025,6 +5475,114 @@ onBeforeUnmount(() => {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.custom-select {
+  position: relative;
+  min-width: 0;
+}
+
+.custom-select-trigger {
+  display: flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  outline: none;
+  background: #ffffff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 20px;
+  padding: 0 14px;
+  text-align: left;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.custom-select-trigger:hover {
+  border-color: #b4c5ff;
+  background: var(--primary-faint);
+}
+
+.custom-select.open .custom-select-trigger,
+.custom-select-trigger:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.custom-select.disabled .custom-select-trigger,
+.custom-select-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.custom-select-arrow {
+  display: block;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-right: 2px solid #111827;
+  border-bottom: 2px solid #111827;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.16s ease;
+}
+
+.custom-select.open .custom-select-arrow {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  z-index: 35;
+  display: grid;
+  gap: 4px;
+  border: 1px solid #b4c5ff;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+}
+
+.reference-copy-page .custom-select-menu {
+  top: auto;
+  bottom: calc(100% + 7px);
+}
+
+.custom-select-option {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 20px;
+  padding: 0 12px;
+  text-align: left;
+}
+
+.custom-select-option:hover,
+.custom-select-option:focus-visible {
+  outline: none;
+  background: var(--primary-faint);
+  color: var(--primary);
+}
+
+.custom-select-option.selected {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 800;
 }
 
 .copy-workspace-header {
@@ -5080,7 +5638,7 @@ onBeforeUnmount(() => {
   color: #ffffff;
   font-size: 17px;
   font-weight: 900;
-  box-shadow: 0 9px 18px rgba(107, 88, 255, 0.25);
+  box-shadow: 0 9px 18px rgba(37, 99, 235, 0.18);
 }
 
 .copy-output-meta {
@@ -5125,11 +5683,11 @@ onBeforeUnmount(() => {
   min-width: 86px;
   min-height: 42px;
   border-radius: 999px;
-  background: var(--primary);
+  background: var(--action);
   color: #ffffff;
   font-size: 15px;
   font-weight: 800;
-  box-shadow: 0 8px 16px rgba(107, 88, 255, 0.22);
+  box-shadow: 0 8px 16px rgba(253, 118, 26, 0.2);
 }
 
 .reference-copy-page .publish-mini svg {
@@ -5158,7 +5716,7 @@ onBeforeUnmount(() => {
   height: 22px;
   border-radius: 999px;
   background: var(--primary);
-  box-shadow: 0 0 0 3px rgba(107, 88, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   content: '';
 }
 
@@ -5241,7 +5799,7 @@ onBeforeUnmount(() => {
 
 .publish-subnav button.active {
   border-right-color: var(--primary);
-  background: #eef2ff;
+  background: var(--primary-faint);
   color: var(--primary);
 }
 
@@ -5318,15 +5876,30 @@ onBeforeUnmount(() => {
 }
 
 .ai-cover-button {
+  position: relative;
+  overflow: hidden;
   min-height: 32px;
   border: 0;
   border-radius: 999px;
-  background: #eef2ff;
+  background: var(--primary-faint);
   color: var(--primary);
   cursor: pointer;
   font-size: 14px;
   font-weight: 800;
   padding: 0 14px;
+}
+
+.ai-cover-button.is-loading {
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.ai-cover-button.is-loading::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  content: '';
+  transform: translateX(-100%);
+  animation: publish-image-shimmer 1s ease-in-out infinite;
 }
 
 .editor-toolbar {
@@ -5461,7 +6034,7 @@ onBeforeUnmount(() => {
 }
 
 .image-add-tile,
-.image-edit-thumb button {
+.image-thumb-preview {
   display: grid;
   width: 140px;
   height: 140px;
@@ -5476,8 +6049,16 @@ onBeforeUnmount(() => {
 .image-add-tile {
   border: 2px dashed #d9dee8;
   color: #9ca3af;
-  font-size: 52px;
-  font-weight: 300;
+}
+
+.image-add-tile svg {
+  width: 32px;
+  height: 32px;
+}
+
+.image-add-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .image-edit-thumb {
@@ -5486,9 +6067,15 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
-.image-edit-thumb button {
+.image-thumb-preview {
+  position: relative;
   border: 1px solid #e5e7eb;
   padding: 0;
+}
+
+.image-edit-thumb.status-generating .image-thumb-preview {
+  border-color: rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
 }
 
 .image-edit-thumb img {
@@ -5535,6 +6122,57 @@ onBeforeUnmount(() => {
   content: '';
   transform: translateX(-100%);
   animation: publish-image-shimmer 1.2s ease-in-out infinite;
+}
+
+.image-source-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 34px;
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.74);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
+.image-thumb-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.image-thumb-action {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #475569;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.image-thumb-action:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.image-thumb-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.image-thumb-action svg {
+  width: 16px;
+  height: 16px;
 }
 
 .image-edit-thumb figcaption {
@@ -5721,6 +6359,7 @@ onBeforeUnmount(() => {
 }
 
 .publish-platform-list label {
+  position: relative;
   min-height: 84px;
   border-color: #e5e7eb;
   border-radius: 10px;
@@ -5729,8 +6368,8 @@ onBeforeUnmount(() => {
 }
 
 .publish-platform-list label.checked {
-  border-color: #dedbf8;
-  background: #fbfbff;
+  border-color: #b4c5ff;
+  background: var(--primary-faint);
 }
 
 .publish-platform-list label.disabled {
@@ -5742,8 +6381,8 @@ onBeforeUnmount(() => {
 }
 
 .publish-account-avatar {
-  width: 36px;
-  height: 36px;
+  width: 50px;
+  height: 50px;
 }
 
 .publish-platform-logo {
@@ -5810,14 +6449,53 @@ onBeforeUnmount(() => {
 }
 
 .publish-platform-list input {
+  position: absolute;
   width: 22px;
   height: 22px;
-  accent-color: var(--primary);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .publish-platform-list input:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0;
+}
+
+.publish-platform-checkmark {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #ffffff;
+  color: transparent;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.publish-platform-checkmark svg {
+  width: 15px;
+  height: 15px;
+  flex-basis: 15px;
+}
+
+.publish-platform-list label.checked .publish-platform-checkmark {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.publish-platform-list label:focus-within .publish-platform-checkmark {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.publish-platform-list label.disabled .publish-platform-checkmark {
+  background: #f8fafc;
+  opacity: 0.55;
 }
 
 .publish-action {
@@ -5826,6 +6504,306 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   font-size: 22px;
   font-weight: 800;
+}
+
+.reference-publish-page.mode-article {
+  --article-primary: #2563eb;
+  --article-primary-hover: #004ac6;
+  --article-border: #e2e8f0;
+  --article-text: #0b1c30;
+  --article-muted: #434655;
+  background: #f8f9ff;
+}
+
+.reference-publish-page.mode-article .publish-workbench {
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 24px;
+  background: #f8f9ff;
+  padding: 22px 24px;
+}
+
+.reference-publish-page.mode-article .publish-article-panel {
+  width: 330px;
+  height: min(100%, 658px);
+  align-self: start;
+  gap: 0;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+
+.reference-publish-page.mode-article .article-side-settings,
+.reference-publish-page.mode-article .publish-action-card {
+  border: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.reference-publish-page.mode-article .article-side-settings {
+  overflow-y: auto;
+  border-radius: 8px 8px 0 0;
+  padding: 21px 25px 17px;
+  scrollbar-width: none;
+}
+
+.reference-publish-page.mode-article .article-side-settings::-webkit-scrollbar {
+  display: none;
+}
+
+.reference-publish-page.mode-article .publish-action-card {
+  min-height: 82px;
+  border-top: 1px solid var(--article-border);
+  border-radius: 0;
+  padding: 19px 43px;
+}
+
+.reference-publish-page.mode-article .publish-field-block {
+  gap: 7px;
+  margin: 0 0 15px;
+}
+
+.reference-publish-page.mode-article .publish-field-block > label,
+.reference-publish-page.mode-article .publish-field-block > span,
+.reference-publish-page.mode-article .input-field span,
+.reference-publish-page.mode-article .publish-platform-list legend {
+  color: var(--article-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.reference-publish-page.mode-article .cover-upload-box {
+  min-height: 35px;
+  border-style: solid;
+  border-color: var(--article-border);
+  border-radius: 8px;
+  color: var(--article-primary);
+}
+
+.reference-publish-page.mode-article .cover-upload-box:hover {
+  border-color: #b4c5ff;
+  background: var(--primary-faint);
+}
+
+.reference-publish-page.mode-article .cover-upload-box > span {
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reference-publish-page.mode-article .cover-upload-box svg {
+  width: 15px;
+  height: 15px;
+}
+
+.reference-publish-page.mode-article .cover-upload-box img {
+  aspect-ratio: 8 / 1;
+}
+
+.reference-publish-page.mode-article .cover-reference-link {
+  gap: 4px;
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.reference-publish-page.mode-article .cover-reference-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  align-self: center;
+  object-fit: contain;
+  transform: translateY(1px);
+}
+
+.reference-publish-page.mode-article .article-side-settings .input-field input,
+.reference-publish-page.mode-article .article-side-settings .input-field textarea {
+  height: 35px;
+  min-height: 35px;
+  border-color: var(--article-border);
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0 12px;
+  resize: none;
+}
+
+.reference-publish-page.mode-article .article-side-settings .input-field textarea {
+  overflow: hidden;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.reference-publish-page.mode-article .article-side-settings .input-field input:focus,
+.reference-publish-page.mode-article .article-side-settings .input-field textarea:focus {
+  border-color: var(--article-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.reference-publish-page.mode-article .article-platform-list {
+  gap: 9px;
+  margin: 3px 0 0;
+}
+
+.reference-publish-page.mode-article .article-platform-list legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.reference-publish-page.mode-article .article-platform-list label {
+  min-height: 58px;
+  grid-template-columns: 44px minmax(0, 1fr) 23px;
+  gap: 10px;
+  border-color: var(--article-border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 11px;
+}
+
+.reference-publish-page.mode-article .article-platform-list label.checked {
+  border-color: var(--article-border);
+  background: #ffffff;
+}
+
+.publish-wechat-avatar {
+  position: relative;
+  display: block;
+  width: 43px;
+  height: 35px;
+  border-radius: 5px;
+  background: #fafafa;
+}
+
+.wechat-bubble {
+  position: absolute;
+  display: block;
+}
+
+.wechat-bubble-main {
+  top: 8px;
+  left: 9px;
+  width: 18px;
+  height: 14px;
+  border-radius: 10px 10px 10px 4px;
+  background: #86e556;
+}
+
+.wechat-bubble-main::before,
+.wechat-bubble-main::after,
+.wechat-bubble-sub::before,
+.wechat-bubble-sub::after {
+  position: absolute;
+  top: 5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #1f8d21;
+  content: '';
+}
+
+.wechat-bubble-main::before {
+  left: 5px;
+}
+
+.wechat-bubble-main::after {
+  right: 5px;
+}
+
+.wechat-bubble-sub {
+  right: 7px;
+  bottom: 8px;
+  width: 15px;
+  height: 12px;
+  border-radius: 9px 9px 4px 9px;
+  background: #dde1dd;
+}
+
+.wechat-bubble-sub::before,
+.wechat-bubble-sub::after {
+  top: 4px;
+  background: #9aa09b;
+}
+
+.wechat-bubble-sub::before {
+  left: 4px;
+}
+
+.wechat-bubble-sub::after {
+  right: 4px;
+}
+
+.reference-publish-page.mode-article .article-platform-list strong {
+  overflow: hidden;
+  color: var(--article-text);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-publish-page.mode-article .article-platform-list em {
+  margin-top: 1px;
+  color: #10b981;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  padding-left: 15px;
+}
+
+.reference-publish-page.mode-article .article-platform-list em::before {
+  display: grid;
+  width: 10px;
+  height: 10px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  content: '✓';
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.reference-publish-page.mode-article .article-platform-list em.failed::before {
+  content: '!';
+}
+
+.reference-publish-page.mode-article .publish-platform-checkmark {
+  width: 23px;
+  height: 23px;
+  border-color: #d9d9d9;
+  border-radius: 4px;
+}
+
+.reference-publish-page.mode-article .publish-platform-checkmark svg {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.reference-publish-page.mode-article .publish-platform-list label.checked .publish-platform-checkmark {
+  border-color: var(--article-primary);
+  background: var(--article-primary);
+}
+
+.reference-publish-page.mode-article .publish-platform-list label:focus-within .publish-platform-checkmark {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.reference-publish-page.mode-article .publish-action {
+  min-height: 42px;
+  border-radius: 14px;
+  background: var(--action);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.reference-publish-page.mode-article .publish-action:hover {
+  background: var(--action-hover);
 }
 
 .visually-hidden-input {

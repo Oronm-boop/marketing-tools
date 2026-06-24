@@ -537,6 +537,7 @@ const providerOptions: Array<{
   max-height: 90vh;
   overflow-y: auto;
   border-radius: 16px;
+  border: 1px solid #e2e8f0;
   background: #ffffff;
   box-shadow:
     0 10px 40px rgba(15, 23, 42, 0.14),
@@ -565,8 +566,8 @@ const providerOptions: Array<{
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #eff6ff;
-  color: #0058be;
+  background: #eff4ff;
+  color: #2563eb;
   display: grid;
   place-items: center;
 }
@@ -585,14 +586,14 @@ const providerOptions: Array<{
   margin: 0 0 2px;
   font-size: 17px;
   font-weight: 700;
-  color: #1e293b;
+  color: #0b1c30;
   line-height: 24px;
 }
 
 .dialog-header p {
   margin: 0;
   font-size: 13px;
-  color: #64748b;
+  color: #434655;
   line-height: 18px;
 }
 
@@ -603,7 +604,7 @@ const providerOptions: Array<{
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: transparent;
-  color: #64748b;
+  color: #737686;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -611,8 +612,8 @@ const providerOptions: Array<{
 }
 
 .close-btn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: #eff4ff;
+  color: #0b1c30;
 }
 
 .close-btn svg {
@@ -623,7 +624,7 @@ const providerOptions: Array<{
 /* ---- Section ---- */
 .section {
   padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .section:last-of-type {
@@ -634,7 +635,7 @@ const providerOptions: Array<{
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: #434655;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 10px;
@@ -654,8 +655,8 @@ const providerOptions: Array<{
   gap: 6px;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
-  background: #f8fafc;
-  color: #64748b;
+  background: #f8f9ff;
+  color: #434655;
   cursor: pointer;
   padding: 14px 10px 12px;
   text-align: center;
@@ -667,16 +668,16 @@ const providerOptions: Array<{
 }
 
 .provider-tab:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: #1e40af;
+  border-color: #b4c5ff;
+  background: #eff4ff;
+  color: #004ac6;
 }
 
 .provider-tab.active {
-  border-color: #0058be;
-  background: #eff6ff;
-  color: #0058be;
-  box-shadow: 0 0 0 3px rgba(0, 88, 190, 0.1);
+  border-color: #2563eb;
+  background: #eff4ff;
+  color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .provider-tab-icon {
@@ -717,7 +718,7 @@ const providerOptions: Array<{
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: #0b1c30;
 }
 
 .section-dot {
@@ -728,19 +729,19 @@ const providerOptions: Array<{
 }
 
 .dot-local {
-  background: #0058be;
+  background: #2563eb;
 }
 
 .dot-ollama {
-  background: #059669;
+  background: #007e37;
 }
 
 .dot-cloud {
-  background: #7c3aed;
+  background: #fd761a;
 }
 
 .dot-comfyui {
-  background: #0058be;
+  background: #2563eb;
 }
 
 .field-row.two-col {
@@ -758,7 +759,7 @@ const providerOptions: Array<{
 .field-label {
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: #0b1c30;
   line-height: 18px;
 }
 
@@ -771,8 +772,8 @@ const providerOptions: Array<{
   height: 40px;
   border: 1.5px solid #e2e8f0;
   border-radius: 8px;
-  background: #f8fafc;
-  color: #1e293b;
+  background: #f8f9ff;
+  color: #0b1c30;
   font-size: 14px;
   padding: 0 12px;
   outline: none;
@@ -782,9 +783,9 @@ const providerOptions: Array<{
 }
 
 .field-input:focus {
-  border-color: #0058be;
+  border-color: #2563eb;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(0, 88, 190, 0.1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .field-hint {
@@ -810,7 +811,7 @@ const providerOptions: Array<{
   border-radius: 8px;
   background: #f1f5f9;
   font-size: 12px;
-  color: #64748b;
+  color: #434655;
   flex-wrap: wrap;
 }
 
@@ -880,8 +881,8 @@ const providerOptions: Array<{
 }
 
 .success-banner {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: #dcfce7;
+  color: #007e37;
   border: 1px solid #bbf7d0;
 }
 
@@ -898,7 +899,7 @@ const providerOptions: Array<{
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px 20px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid #e2e8f0;
   position: sticky;
   bottom: 0;
   background: #ffffff;
@@ -930,12 +931,12 @@ const providerOptions: Array<{
 }
 
 .btn-primary {
-  background: #0058be;
+  background: #2563eb;
   color: #ffffff;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #004395;
+  background: #004ac6;
 }
 
 .btn-secondary:disabled,

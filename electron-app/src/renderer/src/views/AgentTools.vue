@@ -217,6 +217,26 @@
 
           <form class="tool-form" @submit.prevent="submitCopy">
             <label class="field">
+              <span>我是做什么的</span>
+              <input
+                v-model="copyForm.business"
+                :disabled="copyLoading"
+                type="text"
+                placeholder="智能家居设备厂商"
+              />
+            </label>
+
+            <label class="field">
+              <span>产品或服务特点</span>
+              <textarea
+                v-model="copyForm.features"
+                :disabled="copyLoading"
+                rows="4"
+                placeholder="支持语音控制，兼容米家/苹果HomeKit..."
+              ></textarea>
+            </label>
+
+            <label class="field">
               <span>关键词</span>
               <input
                 ref="copyKeywordInputRef"
@@ -250,6 +270,13 @@
                   type="number"
                   placeholder="3"
                 />
+              </label>
+
+              <label class="field">
+                <span>文案长度</span>
+                <select v-model="copyForm.copyLength" :disabled="copyLoading">
+                  <option v-for="length in copyLengthOptions" :key="length" :value="length">{{ length }}</option>
+                </select>
               </label>
             </div>
 
@@ -350,6 +377,7 @@ import { computed, defineComponent, h, nextTick, onMounted, reactive, ref, type 
 import {
   generateCopywriting,
   generateSeoKeywords,
+  type CopyLength,
   type CopywritingItem,
   type SeoKeywordItem
 } from '@api/generation'
@@ -364,10 +392,13 @@ type SeoEntryRequest = {
   searchEngines: string[]
 }
 type CopyEntryRequest = {
+  business: string
+  features: string
   keyword: string
   keywordOccurrences: number
   articleCount: number
   platforms: string[]
+  copyLength: CopyLength
 }
 type SeoGenerationEntry = {
   id: string
@@ -481,11 +512,15 @@ const seoForm = reactive({
 })
 
 const copyForm = reactive({
+  business: '',
+  features: '',
   keyword: '',
   keywordOccurrences: 0,
   articleCount: 3,
-  platforms: ['小红书', '百度', 'B站']
+  platforms: ['小红书', '百度', 'B站'],
+  copyLength: '中' as CopyLength
 })
+const copyLengthOptions: CopyLength[] = ['短', '中', '长']
 
 const seoLoading = ref(false)
 const copyLoading = ref(false)
@@ -547,18 +582,24 @@ const submitCopy = async () => {
   copyLoading.value = true
   copyError.value = ''
   const requestPayload: CopyEntryRequest = {
+    business: copyForm.business.trim(),
+    features: copyForm.features.trim(),
     keyword: copyForm.keyword.trim(),
     keywordOccurrences: Number(copyForm.keywordOccurrences),
     articleCount: Number(copyForm.articleCount),
-    platforms: [...copyForm.platforms]
+    platforms: [...copyForm.platforms],
+    copyLength: copyForm.copyLength
   }
 
   try {
     const response = await generateCopywriting({
+      business_description: requestPayload.business,
+      product_features: requestPayload.features,
       keyword: requestPayload.keyword,
       keyword_repeat_count: requestPayload.keywordOccurrences,
       article_count: requestPayload.articleCount,
-      platform_styles: requestPayload.platforms
+      platform_styles: requestPayload.platforms,
+      copy_length: requestPayload.copyLength
     })
     console.log('[LLM copywriting response]', response)
     console.log(
@@ -600,6 +641,8 @@ const validateSeoForm = () => {
 }
 
 const validateCopyForm = () => {
+  if (!copyForm.business.trim()) return '请输入业务描述'
+  if (!copyForm.features.trim()) return '请输入产品或服务特点'
   if (!copyForm.keyword.trim()) return '请输入关键词'
   if (!Number.isFinite(Number(copyForm.keywordOccurrences)) || copyForm.keywordOccurrences < 0) {
     return '关键词出现次数不能小于 0'
@@ -608,7 +651,15 @@ const validateCopyForm = () => {
   if (!Number.isFinite(Number(copyForm.articleCount)) || copyForm.articleCount < 1) return '生成篇数至少为 1'
   if (copyForm.articleCount > 20) return '生成篇数最多为 20'
   if (!copyForm.platforms.length) return '请至少选择一个社媒平台'
+  if (!copyLengthOptions.includes(copyForm.copyLength)) return '请选择文案长度'
   return ''
+}
+
+const normalizeCopyLength = (value: unknown): CopyLength => {
+  const text = String(value || '').trim()
+  if (text.includes('短')) return '短'
+  if (text.includes('长')) return '长'
+  return '中'
 }
 
 const getErrorMessage = (error: unknown) => {
@@ -631,6 +682,8 @@ const prepareCopyFromKeyword = async (keyword: string) => {
   const selectedKeyword = keyword.trim()
   if (!selectedKeyword || copyLoading.value) return
 
+  copyForm.business = seoForm.business.trim()
+  copyForm.features = seoForm.features.trim()
   copyForm.keyword = selectedKeyword
   copyError.value = ''
   copyResults.value = []
@@ -700,10 +753,13 @@ function hydrateFromSession(session: ChatSession) {
     return
   }
 
+  copyForm.business = lastEntry.request.business || ''
+  copyForm.features = lastEntry.request.features || ''
   copyForm.keyword = lastEntry.request.keyword
   copyForm.keywordOccurrences = lastEntry.request.keywordOccurrences
   copyForm.articleCount = lastEntry.request.articleCount
   copyForm.platforms = [...lastEntry.request.platforms]
+  copyForm.copyLength = normalizeCopyLength(lastEntry.request.copyLength)
   copyResults.value = lastEntry.response.items
   copyModel.value = lastEntry.response.model
 }
@@ -830,7 +886,7 @@ onMounted(() => {
 
 :global(body) {
   margin: 0;
-  background: #f4f6f8;
+  background: #f8f9ff;
 }
 
 :global(button),
@@ -840,24 +896,27 @@ onMounted(() => {
 }
 
 .agent-page {
-  --primary: #0058be;
-  --primary-soft: #dbeafe;
+  --primary: #2563eb;
+  --primary-strong: #004ac6;
+  --primary-soft: #dbe1ff;
+  --primary-faint: #eff4ff;
   --success: var(--primary);
   --success-soft: var(--primary-soft);
-  --success-faint: #eff6ff;
-  --success-border: #bfdbfe;
-  --background: #f4f6f8;
+  --success-faint: var(--primary-faint);
+  --success-border: #b4c5ff;
+  --background: #f8f9ff;
   --surface: #ffffff;
-  --surface-muted: #f1f5f9;
-  --text: #1e293b;
+  --surface-muted: #eff4ff;
+  --text: #0b1c30;
   --text-soft: #334155;
-  --text-muted: #64748b;
+  --text-muted: #434655;
   --border: #e2e8f0;
   --sidebar-width: 288px;
   min-height: 100vh;
   background: var(--background);
   color: var(--text-soft);
   font-family:
+    'Hanken Grotesk',
     Inter,
     ui-sans-serif,
     system-ui,
@@ -917,7 +976,7 @@ onMounted(() => {
   cursor: pointer;
   font-size: 15px;
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px rgba(0, 88, 190, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.04);
   transition:
     background-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -929,7 +988,7 @@ onMounted(() => {
 .new-chat-button.active {
   background: var(--success);
   color: #ffffff;
-  box-shadow: 0 10px 22px rgba(0, 88, 190, 0.18);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
 }
 
 .history-list {
@@ -978,7 +1037,7 @@ onMounted(() => {
 }
 
 .history-item:hover {
-  background: #f8fafc;
+  background: #f8f9ff;
   border-color: var(--border);
   transform: translateX(1px);
 }
@@ -986,8 +1045,8 @@ onMounted(() => {
 .history-item.active {
   background: linear-gradient(90deg, var(--success-faint) 0%, #ffffff 100%);
   border-color: var(--success-border);
-  box-shadow: 0 10px 24px rgba(0, 88, 190, 0.1);
-  color: #0755b4;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.1);
+  color: var(--primary-strong);
 }
 
 .history-item.active::before {
@@ -1019,7 +1078,7 @@ onMounted(() => {
 }
 
 .history-item.active .history-row svg {
-  color: #0755b4;
+  color: var(--primary-strong);
 }
 
 .history-title {
@@ -1033,7 +1092,7 @@ onMounted(() => {
 }
 
 .history-item.active .history-title {
-  color: #0755b4;
+  color: var(--primary-strong);
   font-weight: 700;
 }
 
@@ -1049,7 +1108,7 @@ onMounted(() => {
 }
 
 .history-item.active .history-date {
-  color: #0755b4;
+  color: var(--primary-strong);
   opacity: 0.78;
 }
 
@@ -1160,13 +1219,13 @@ onMounted(() => {
 }
 
 .tool-tab:hover {
-  color: #004395;
+  color: var(--primary-strong);
 }
 
 .tool-tab.active {
   background: var(--primary);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 88, 190, 0.16);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
 }
 
 .new-chat-button:active,
@@ -1250,7 +1309,8 @@ onMounted(() => {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   border: 0;
   border-radius: 12px;
@@ -1266,12 +1326,14 @@ onMounted(() => {
 
 .field input:disabled,
 .field textarea:disabled,
+.field select:disabled,
 .choice-pill input:disabled {
   cursor: not-allowed;
   opacity: 0.68;
 }
 
-.field input {
+.field input,
+.field select {
   height: 44px;
   padding: 0 16px;
 }
@@ -1288,9 +1350,10 @@ onMounted(() => {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(0, 88, 190, 0.16);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .choice-group {
@@ -1351,14 +1414,14 @@ onMounted(() => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
-  box-shadow: 0 12px 20px rgba(0, 88, 190, 0.16);
+  box-shadow: 0 12px 20px rgba(37, 99, 235, 0.16);
   transition:
     background-color 0.18s ease,
     transform 0.18s ease;
 }
 
 .primary-action:hover {
-  background: #004395;
+  background: var(--primary-strong);
 }
 
 .primary-action:disabled {
@@ -1373,10 +1436,10 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #b4c5ff;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #0755b4;
+  background: var(--primary-faint);
+  color: var(--primary-strong);
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
@@ -1396,9 +1459,9 @@ onMounted(() => {
 }
 
 .table-action:hover:not(:disabled) {
-  border-color: #93c5fd;
-  background: #dbeafe;
-  color: #004395;
+  border-color: #b4c5ff;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
 }
 
 .table-action:disabled {
@@ -1462,10 +1525,10 @@ onMounted(() => {
 .keyword-tag {
   max-width: 100%;
   overflow-wrap: anywhere;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #b4c5ff;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #0755b4;
+  background: var(--primary-faint);
+  color: var(--primary-strong);
   font-size: 13px;
   font-weight: 700;
   line-height: 20px;
@@ -1517,8 +1580,8 @@ onMounted(() => {
 }
 
 .difficulty-badge.low {
-  background: #eff6ff;
-  color: #0755b4;
+  background: var(--primary-faint);
+  color: var(--primary-strong);
 }
 
 .difficulty-badge.medium {
@@ -1564,8 +1627,8 @@ onMounted(() => {
 
 .copy-meta span {
   border-radius: 999px;
-  background: #dbeafe;
-  color: #0755b4;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
   font-size: 12px;
   font-weight: 700;
   line-height: 18px;
@@ -1639,8 +1702,8 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #0755b4;
+  background: var(--primary-faint);
+  color: var(--primary-strong);
   font-size: 12px;
   font-weight: 700;
   line-height: 18px;
@@ -1686,8 +1749,8 @@ onMounted(() => {
 
 .copy-platform-badge {
   border-radius: 999px;
-  background: #dbeafe;
-  color: #0755b4;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
   font-size: 12px;
   font-weight: 700;
   line-height: 18px;

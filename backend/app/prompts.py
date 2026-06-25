@@ -1,3 +1,4 @@
+from .copywriting_intent import has_recommendation_intent
 from .schemas import CopywritingRequest, PublishImagePromptRequest, SeoKeywordRequest
 
 
@@ -36,6 +37,17 @@ XIAOHONGSHU_TRAFFIC_COPY_RULES = """
 """.strip()
 
 
+XIAOHONGSHU_SYMBOL_COPY_RULES = """
+小红书符号与排版硬性规则（仅当 platform 是“小红书”时适用）：
+- 每篇小红书 content 必须同时包含“序号/列表符号”和“标题/强调符号”两类元素。
+- 序号/列表符号用于步骤说明、清单罗列、避坑提示、对比总结或建议拆解，至少使用一种连续编号或项目符号：1️⃣ 2️⃣ 3️⃣、① ② ③、▪️ ▫️ ◾、⭐ ✨；也可使用 ✅ 📌 📝 等小红书常见清单符号。
+- 标题/强调符号用于 title 前缀、段落小标题或重点内容提示，至少使用一种：‼️ ❗ ⚡、☁️、⚠️ ➡️ ✔️ ❌；也可使用 🔥 💡 🎯 🌟 💥 🧡 等小红书常见强调符号。
+- 符号必须自然服务内容结构，不要整段堆满 emoji；每个段落最多 1-2 个重点符号，避免像符号清单。
+- 如果 title 使用 emoji，必须遵守小红书标题计数规则并主动缩短中文部分，不能为了加符号导致 title 超过20字符。
+- 输出 JSON 前必须逐篇自检：凡是 platform 为“小红书”的 item，如果 content 缺少上述任一类符号，必须先重写 content，再输出。
+""".strip()
+
+
 def build_seo_user_prompt(payload: SeoKeywordRequest, web_context: str) -> str:
     engines = "、".join(payload.search_engines)
     return f"""
@@ -71,9 +83,13 @@ def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str)
     xiaohongshu_traffic_rules = (
         f"\n\n{XIAOHONGSHU_TRAFFIC_COPY_RULES}" if "小红书" in payload.platform_styles else ""
     )
+    xiaohongshu_symbol_rules = (
+        f"\n\n{XIAOHONGSHU_SYMBOL_COPY_RULES}" if "小红书" in payload.platform_styles else ""
+    )
     target_count = max(payload.article_count, len(payload.platform_styles))
     business_description = payload.business_description or "未提供"
     product_features = payload.product_features or "未提供"
+    recommendation_rules = _build_product_recommendation_rules(payload)
     return f"""
 你是一名资深 SEO 内容营销专家和新媒体文案策划。
 
@@ -86,6 +102,8 @@ def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str)
 
 联网搜索上下文（来自 Tavily）：
 {web_context}
+
+{recommendation_rules}
 
 生成数量：{target_count} 篇。
 平台覆盖规则：
@@ -113,17 +131,19 @@ def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str)
 内容质量要求：
 - 每篇必须是可直接发布的完整成品文案，不要写大纲、思路、示例、节选或占位文本。
 - 必须优先围绕用户业务和产品特点展开，把产品卖点、目标用户、使用场景写具体；不要只基于关键词写泛行业套话。
-- 如果用户业务或产品特点为“未提供”，不要自行编造具体品牌、功能、价格、销量、资质或承诺。
+- 如果用户业务或产品特点为"未提供"，不要自行编造搜索结果中没有的品牌、功能、价格、销量、资质或承诺。
+- 当关键词具有推荐、选购、对比、性价比、榜单、清单等意图时，必须从联网搜索上下文中提取并引用具体的产品型号、品牌名称、关键参数和价格信息，自然融入文案正文；不要泛泛而谈只写品类，要让读者看到具体的产品推荐。
+- 如果搜索上下文提供了多个产品，推荐/选购类文案至少要具体提及 2-3 款产品，包括型号名称和核心卖点差异。
 - 不要因为联网了而刻意强调当前的年份。
 - 每个平台的标题、语气、结构、符号、标签数量必须明显不同，不能只改标题。
 - content 必须包含完整正文、结尾引导和 #标签。
 - 使用真实创作者口吻，避免 AI 味、模板感、空话和泛泛而谈。
-- 必须结合联网搜索上下文中的真实趋势、用户问题、竞品卖点或平台话题；不要编造上下文没有支持的具体新闻、价格、销量或排名。
-- 不允许编造互联网上不存在的产品。
+- 引用联网搜索上下文中的真实产品、趋势、用户痛点和竞品信息时，必须忠于原文数据；不要编造搜索上下文没有支持的具体新闻、价格、销量或排名。
+- 不允许编造互联网上不存在的产品；但搜索结果中已有的产品必须积极引用。
 - title、angle、content 字段值中不要使用英文双引号 "；需要引用时只使用中文引号「」或单引号，避免破坏 JSON。
 
 平台风格要求：
-{platform_rules}{xiaohongshu_traffic_rules}
+{platform_rules}{xiaohongshu_traffic_rules}{xiaohongshu_symbol_rules}
 
 输出严格 JSON 对象，且只包含 items 字段。
 items 是数组，每个对象必须包含：
@@ -140,6 +160,29 @@ items 是数组，每个对象必须包含：
 5. 不要输出“文案标题”“平台风格”“切入点”“正文”等占位词。
 6. content 是 JSON 字符串；如果需要换行，请使用 \\n。
 7. JSON 字符串内不得出现未转义的英文双引号。
+8. 如果 platform 是“小红书”，content 必须严格满足“小红书符号与排版硬性规则”：content 第一行必须以一个标题/强调符号开头，content 正文中必须至少出现一处连续列表结构；不满足时不要输出该 item，先重写。
+""".strip()
+
+
+def _build_product_recommendation_rules(payload: CopywritingRequest) -> str:
+    if not has_recommendation_intent(
+        payload.keyword,
+        payload.business_description,
+        payload.product_features,
+    ):
+        return """
+选品推荐硬性规则（当前关键词已判定为推荐/选购意图：否）：
+- 当前主题不是推荐/选购类时，优先写用户业务与产品特点；只有在对比、趋势或用户决策说明时才引用联网搜索上下文里的竞品信息。
+""".strip()
+
+    return """
+选品推荐硬性规则（当前关键词已判定为推荐/选购意图：是）：
+- 每篇 content 必须包含一个“具体推荐”或“推荐清单”段落，不能只写体验场景、功能感受或泛行业种草。
+- 每篇 content 必须从联网搜索上下文中提到至少 2 款具体产品；如果上下文中可用产品达到 3 款，优先写 3 款。
+- 每款产品必须写清：品牌/型号 + 一个核心卖点或参数 + 价格、预算、适合人群中的至少一项；没有价格就写搜索上下文支持的参数，不要补造价格。
+- 标题、开头和 angle 必须体现推荐、选购或对比，不要只围绕“语音操控”“运动记录”等单一功能做泛泛种草。
+- 严禁用“这款表”“这款产品”“热门款”“旗舰体验”等词替代具体产品名；第一次出现必须写完整型号。
+- 正文前半部分就要出现具体型号，不允许只在结尾附带一句推荐。
 """.strip()
 
 

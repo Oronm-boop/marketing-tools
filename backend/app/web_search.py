@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from .config import HARDCODED_TAVILY_API_KEY, Settings
+from .copywriting_intent import has_recommendation_intent
 from .schemas import CopywritingRequest, SeoKeywordRequest
 
 
@@ -98,9 +99,16 @@ def build_copywriting_search_query(payload: CopywritingRequest) -> str:
     product_context = " ".join(
         part for part in [payload.business_description, payload.product_features] if part
     )
+    if has_recommendation_intent(
+        payload.keyword,
+        payload.business_description,
+        payload.product_features,
+    ):
+        intent_terms = "高性价比推荐 具体型号 品牌 价格 参数 核心卖点 优缺点 适合人群 横向对比 选购清单 购买建议"
+    else:
+        intent_terms = "最新趋势 用户痛点 热门话题 购买决策 真实体验 口碑对比 竞品卖点 用户评价"
     return (
-        f"{payload.keyword} {product_context} {platforms} 最新趋势 用户痛点 热门话题 "
-        f"购买决策 真实体验 口碑对比 {date.today().year}"
+        f"{payload.keyword} {product_context} {platforms} {intent_terms} {date.today().year}"
     )
 
 

@@ -169,8 +169,8 @@ class PublishImagePromptResponse(BaseModel):
 
 class ImageGenerationRequest(BaseModel):
     prompt: NonEmptyString
-    width: int = Field(default=1920, ge=256, le=4096)
-    height: int = Field(default=1080, ge=256, le=4096)
+    width: int = Field(default=768, ge=256, le=4096)
+    height: int = Field(default=1024, ge=256, le=4096)
     batch_size: int = Field(default=1, ge=1, le=4)
 
 

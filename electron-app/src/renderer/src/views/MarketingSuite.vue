@@ -2592,8 +2592,8 @@ async function generatePublishImage(
 
     const task = await createImageGenerationTask({
       prompt: imagePrompt.description,
-      width: 1920,
-      height: 1080,
+      width: 768,
+      height: 1024,
       batch_size: 1
     })
 
@@ -3849,6 +3849,30 @@ onBeforeUnmount(() => {
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
+}
+
+.suite-header,
+.panel-title,
+.workspace-header {
+  -webkit-app-region: drag;
+}
+
+button,
+input,
+textarea,
+select,
+label,
+a,
+webview,
+.header-actions,
+.history-top-button,
+.icon-button,
+.custom-select,
+.account-strip,
+.workspace-scroll,
+.reference-fields,
+.publish-workbench {
+  -webkit-app-region: no-drag;
 }
 
 :global(*) {

@@ -31,6 +31,12 @@ function createWindow(): BrowserWindow {
     center: true,
     show: false,
     autoHideMenuBar: true,
+    title: '',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#ffffff',
+      symbolColor: '#0b1c30'
+    },
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

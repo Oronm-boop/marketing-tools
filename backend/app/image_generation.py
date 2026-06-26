@@ -58,7 +58,7 @@ COMFYUI_WORKFLOW: dict[str, Any] = {
     "4": {
         "inputs": {
             "seed": 184420318989244,
-            "steps": 10,
+            "steps": 4,
             "cfg": 1,
             "sampler_name": "euler",
             "scheduler": "simple",
@@ -86,8 +86,8 @@ COMFYUI_WORKFLOW: dict[str, Any] = {
     },
     "7": {
         "inputs": {
-            "width": 1920,
-            "height": 1080,
+            "width": 768,
+            "height": 1024,
             "batch_size": 1,
         },
         "class_type": "EmptyLatentImage",

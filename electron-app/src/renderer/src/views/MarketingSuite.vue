@@ -1,10 +1,6 @@
 <template>
   <div class="suite-shell">
     <aside class="suite-sidebar" aria-label="主导航">
-      <div class="suite-brand">
-        <img :src="brandLogoUrl" alt="MDT Marketing" />
-      </div>
-
       <nav class="suite-nav" aria-label="营销工具导航">
         <button
           v-for="item in primaryNav"
@@ -208,6 +204,63 @@
                   />
                   <em>MAX100</em>
                 </label>
+                <label class="select-field knowledge-base-field">
+                  <span>知识库</span>
+                  <div
+                    class="custom-select knowledge-select"
+                    :class="{ open: knowledgeBaseDropdownOpen === 'seo', disabled: seoLoading }"
+                    @focusout="handleKnowledgeBaseDropdownFocusout"
+                  >
+                    <button
+                      class="custom-select-trigger knowledge-select-trigger"
+                      :aria-expanded="knowledgeBaseDropdownOpen === 'seo'"
+                      :disabled="seoLoading"
+                      type="button"
+                      @click="toggleKnowledgeBaseDropdown('seo')"
+                    >
+                      <span class="knowledge-trigger-label">{{ getKnowledgeBaseLabel('seo') }}</span>
+                      <span class="custom-select-arrow" aria-hidden="true"></span>
+                    </button>
+                    <div v-if="knowledgeBaseDropdownOpen === 'seo'" class="custom-select-menu knowledge-select-menu" role="listbox">
+                      <button
+                        class="custom-select-option knowledge-select-option"
+                        :class="{ selected: selectedSeoKnowledgeBaseId === KNOWLEDGE_BASE_NONE_ID }"
+                        type="button"
+                        role="option"
+                        :aria-selected="selectedSeoKnowledgeBaseId === KNOWLEDGE_BASE_NONE_ID"
+                        @pointerdown.prevent.stop="selectKnowledgeBase('seo', KNOWLEDGE_BASE_NONE_ID)"
+                        @click.stop="selectKnowledgeBase('seo', KNOWLEDGE_BASE_NONE_ID)"
+                      >
+                        <img class="knowledge-option-icon disabled" :src="disabledKnowledgeBaseIconUrl" alt="" aria-hidden="true" />
+                        <span>不使用知识库</span>
+                        <IconGlyph v-if="selectedSeoKnowledgeBaseId === KNOWLEDGE_BASE_NONE_ID" class="knowledge-option-check" name="check" />
+                      </button>
+                      <button
+                        v-for="knowledgeBase in knowledgeBases"
+                        :key="knowledgeBase.id"
+                        class="custom-select-option knowledge-select-option"
+                        :class="{ selected: selectedSeoKnowledgeBaseId === knowledgeBase.id }"
+                        type="button"
+                        role="option"
+                        :aria-selected="selectedSeoKnowledgeBaseId === knowledgeBase.id"
+                        @pointerdown.prevent.stop="selectKnowledgeBase('seo', knowledgeBase.id)"
+                        @click.stop="selectKnowledgeBase('seo', knowledgeBase.id)"
+                      >
+                        <img class="knowledge-option-icon" :src="knowledgeBaseIconUrl" alt="" aria-hidden="true" />
+                        <span>{{ knowledgeBase.name }}</span>
+                        <IconGlyph v-if="selectedSeoKnowledgeBaseId === knowledgeBase.id" class="knowledge-option-check" name="check" />
+                      </button>
+                      <button
+                        class="knowledge-manage-option"
+                        type="button"
+                        @pointerdown.prevent.stop="openKnowledgeBaseManager"
+                        @click.stop="openKnowledgeBaseManager"
+                      >
+                        管理知识库
+                      </button>
+                    </div>
+                  </div>
+                </label>
                 <p v-if="seoError" class="error-text">{{ seoError }}</p>
               </div>
               <footer class="panel-action-bar">
@@ -225,7 +278,7 @@
                 <h2>生成结果</h2>
                 <p>
                   我是做什么的
-                  <strong>「{{ seoForm.business || 'AIPC' }}」</strong>
+                  <strong>「{{ seoForm.business }}」</strong>
                 </p>
               </div>
               <button class="history-top-button" type="button" @click="openHistory('seo')">
@@ -238,13 +291,24 @@
               <section class="result-card seo-result-card">
                 <div class="result-toolbar">
                   <span></span>
-                  <button class="ghost-button compact" type="button" @click="resetSeoResults">
+                  <button class="ghost-button compact" :disabled="seoLoading" type="button" @click="resetSeoResults">
                     <IconGlyph name="refresh" />
                     <span>重新生成</span>
                   </button>
                 </div>
                 <h3>SEO关键词结果</h3>
-                <div v-if="displayedSeoResults.length" class="result-tags">
+                <div v-if="seoLoading" class="generation-loading-state" role="status" aria-live="polite">
+                  <div class="generation-spinner" aria-hidden="true">
+                    <span></span>
+                  </div>
+                  <strong>正在生成 SEO 关键词</strong>
+                  <div class="generation-skeleton" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+                <div v-else-if="displayedSeoResults.length" class="result-tags">
                   <span v-for="item in displayedSeoResults" :key="item.keyword">{{ item.keyword }}</span>
                 </div>
                 <div v-else class="seo-empty-state">
@@ -252,7 +316,7 @@
                   <strong>这里会生成 SEO 关键词结果</strong>
                   <span>包含关键词、搜索量预估，并可从每条结果继续生成宣传文案</span>
                 </div>
-                <table v-if="displayedSeoResults.length" class="suite-table">
+                <table v-if="!seoLoading && displayedSeoResults.length" class="suite-table">
                   <thead>
                     <tr>
                       <th>关键词</th>
@@ -361,8 +425,8 @@
                       type="button"
                       role="option"
                       :aria-selected="Number(copyForm.articleCount) === count"
-                      @mousedown.prevent
-                      @click="selectCopyArticleCount(count)"
+                      @pointerdown.prevent.stop="selectCopyArticleCount(count)"
+                      @click.stop="selectCopyArticleCount(count)"
                     >
                       {{ count }}
                     </button>
@@ -395,10 +459,67 @@
                       type="button"
                       role="option"
                       :aria-selected="copyLength === length"
-                      @mousedown.prevent
-                      @click="selectCopyLength(length)"
+                      @pointerdown.prevent.stop="selectCopyLength(length)"
+                      @click.stop="selectCopyLength(length)"
                     >
                       {{ length }}
+                    </button>
+                  </div>
+                </div>
+              </label>
+              <label class="select-field knowledge-base-field">
+                <span>知识库</span>
+                <div
+                  class="custom-select knowledge-select"
+                  :class="{ open: knowledgeBaseDropdownOpen === 'copy', disabled: copyLoading }"
+                  @focusout="handleKnowledgeBaseDropdownFocusout"
+                >
+                  <button
+                    class="custom-select-trigger knowledge-select-trigger"
+                    :aria-expanded="knowledgeBaseDropdownOpen === 'copy'"
+                    :disabled="copyLoading"
+                    type="button"
+                    @click="toggleKnowledgeBaseDropdown('copy')"
+                  >
+                    <span class="knowledge-trigger-label">{{ getKnowledgeBaseLabel('copy') }}</span>
+                    <span class="custom-select-arrow" aria-hidden="true"></span>
+                  </button>
+                  <div v-if="knowledgeBaseDropdownOpen === 'copy'" class="custom-select-menu knowledge-select-menu" role="listbox">
+                    <button
+                      class="custom-select-option knowledge-select-option"
+                      :class="{ selected: selectedCopyKnowledgeBaseId === KNOWLEDGE_BASE_NONE_ID }"
+                      type="button"
+                      role="option"
+                      :aria-selected="selectedCopyKnowledgeBaseId === KNOWLEDGE_BASE_NONE_ID"
+                      @pointerdown.prevent.stop="selectKnowledgeBase('copy', KNOWLEDGE_BASE_NONE_ID)"
+                      @click.stop="selectKnowledgeBase('copy', KNOWLEDGE_BASE_NONE_ID)"
+                    >
+                      <img class="knowledge-option-icon disabled" :src="disabledKnowledgeBaseIconUrl" alt="" aria-hidden="true" />
+                      <span>不使用知识库</span>
+                      <IconGlyph v-if="selectedCopyKnowledgeBaseId === KNOWLEDGE_BASE_NONE_ID" class="knowledge-option-check" name="check" />
+                    </button>
+                    <button
+                      v-for="knowledgeBase in knowledgeBases"
+                      :key="knowledgeBase.id"
+                      class="custom-select-option knowledge-select-option"
+                      :class="{ selected: selectedCopyKnowledgeBaseId === knowledgeBase.id }"
+                      type="button"
+                      role="option"
+                      :aria-selected="selectedCopyKnowledgeBaseId === knowledgeBase.id"
+                      @pointerdown.prevent.stop="selectKnowledgeBase('copy', knowledgeBase.id)"
+                      @click.stop="selectKnowledgeBase('copy', knowledgeBase.id)"
+                    >
+                      <img class="knowledge-option-icon" :src="knowledgeBaseIconUrl" alt="" aria-hidden="true" />
+                      <span>{{ knowledgeBase.name }}</span>
+                      <IconGlyph v-if="selectedCopyKnowledgeBaseId === knowledgeBase.id" class="knowledge-option-check" name="check" />
+                    </button>
+                    <button
+                      class="knowledge-manage-option"
+                      type="button"
+                      @pointerdown.prevent.stop="openKnowledgeBaseManager"
+                      @click.stop="openKnowledgeBaseManager"
+                    >
+                      管理知识库
                     </button>
                   </div>
                 </div>
@@ -418,7 +539,7 @@
             <header class="workspace-header copy-workspace-header">
               <div>
                 <h2>生成结果</h2>
-                <p>共 {{ displayedCopyResults.length }} 篇文案 · 关键词「{{ copyForm.keyword || '待输入' }}」</p>
+                <p>{{ copyResultSummary }}</p>
               </div>
               <button class="history-top-button" type="button" @click="openHistory('copy')">
                 <IconGlyph name="history" />
@@ -428,7 +549,18 @@
 
             <div class="workspace-scroll copy-results-scroll">
               <div class="copy-results">
-                <div v-if="!displayedCopyResults.length" class="copy-empty-state">
+                <div v-if="copyLoading" class="generation-loading-state copy-generation-loading" role="status" aria-live="polite">
+                  <div class="generation-spinner" aria-hidden="true">
+                    <span></span>
+                  </div>
+                  <strong>正在生成宣传文案</strong>
+                  <div class="generation-skeleton" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+                <div v-else-if="!displayedCopyResults.length" class="copy-empty-state">
                   <IconGlyph name="message" />
                   <strong>暂无文案内容</strong>
                   <span>生成结果会显示在这里</span>
@@ -486,11 +618,11 @@
                   <button
                     class="ai-cover-button"
                     :class="{ 'is-loading': publishImageAutoGenerating }"
-                    :disabled="publishLoading || publishImagePromptLoading || publishImageAutoGenerating"
+                    :disabled="!canGenerateNextPublishImage"
                     type="button"
-                    @click="generateAllPublishImages"
+                    @click="generateNextPublishImage"
                   >
-                    {{ publishImageAutoGenerating ? '配图中...' : 'AI自动配图' }}
+                    {{ publishImageAutoGenerating ? '配图中...' : 'AI配图' }}
                   </button>
                 </div>
                 <div class="editor-toolbar" aria-label="编辑器工具栏">
@@ -519,7 +651,16 @@
                   :disabled="publishLoading"
                   placeholder="在此输入正文"
                 ></textarea>
-                <figure v-if="articleInlineImageUrl" class="article-inline-image">
+                <figure
+                  v-if="articleInlineImageUrl"
+                  class="article-inline-image"
+                  role="button"
+                  tabindex="0"
+                  aria-label="放大预览文章配图"
+                  @click="openFirstPublishImagePreview"
+                  @keydown.enter.prevent="openFirstPublishImagePreview"
+                  @keydown.space.prevent="openFirstPublishImagePreview"
+                >
                   <img :src="articleInlineImageUrl" alt="文章配图预览" />
                 </figure>
               </article>
@@ -643,11 +784,11 @@
                   <button
                     class="ai-cover-button"
                     :class="{ 'is-loading': publishImageAutoGenerating }"
-                    :disabled="publishLoading || publishImagePromptLoading || publishImageAutoGenerating"
+                    :disabled="!canGenerateNextPublishImage"
                     type="button"
-                    @click="generateAllPublishImages"
+                    @click="generateNextPublishImage"
                   >
-                    {{ publishImageAutoGenerating ? '配图中...' : 'AI自动配图' }}
+                    {{ publishImageAutoGenerating ? '配图中...' : 'AI配图' }}
                   </button>
                 </header>
                 <div class="image-edit-strip" aria-label="图文图片编辑">
@@ -667,26 +808,56 @@
                     class="image-edit-thumb"
                     :class="`status-${slot.status}`"
                   >
-                    <div class="image-thumb-preview">
+                    <div
+                      class="image-thumb-preview"
+                      :class="{ 'is-previewable': canPreviewPublishImage(slot) }"
+                      :role="canPreviewPublishImage(slot) ? 'button' : undefined"
+                      :tabindex="canPreviewPublishImage(slot) ? 0 : -1"
+                      :aria-label="`放大预览图片${slot.index + 1}`"
+                      @click="openPublishImagePreview(slot)"
+                      @keydown.enter.prevent="openPublishImagePreview(slot)"
+                      @keydown.space.prevent="openPublishImagePreview(slot)"
+                    >
                       <img v-if="slot.status === 'ready' && slot.imageUrl" :src="slot.imageUrl" :alt="slot.name" />
                       <span v-else-if="slot.status === 'generating'" class="image-thumb-skeleton" aria-hidden="true"></span>
                       <span v-else class="image-thumb-placeholder">
                         <IconGlyph name="image" />
-                        <small>{{ slot.status === 'failed' ? '重试' : `${slot.index + 1}` }}</small>
+                        <small v-if="slot.status === 'failed'">重试</small>
                       </span>
                       <span v-if="slot.status === 'ready'" class="image-source-badge">
                         {{ slot.source === 'upload' ? '上传' : 'AI' }}
                       </span>
                       <div class="image-thumb-actions">
                         <button
+                          v-if="canPreviewPublishImage(slot)"
+                          class="image-thumb-action"
+                          type="button"
+                          :aria-label="`放大预览图片${slot.index + 1}`"
+                          title="放大预览"
+                          @click.stop="openPublishImagePreview(slot)"
+                        >
+                          <IconGlyph name="search" />
+                        </button>
+                        <button
                           class="image-thumb-action"
                           :disabled="publishLoading || publishImageAutoGenerating || slot.status === 'generating'"
                           type="button"
                           :aria-label="`上传或替换图片${slot.index + 1}`"
                           title="上传/替换"
-                          @click="choosePublishImageUpload(slot.index)"
+                          @click.stop="choosePublishImageUpload(slot.index)"
                         >
                           <IconGlyph name="upload" />
+                        </button>
+                        <button
+                          v-if="slot.status === 'ready'"
+                          class="image-thumb-action image-thumb-delete"
+                          :disabled="publishLoading || publishImageAutoGenerating"
+                          type="button"
+                          :aria-label="`删除图片${slot.index + 1}`"
+                          title="删除"
+                          @click.stop="deletePublishImage(slot.index)"
+                        >
+                          <IconGlyph name="trash" />
                         </button>
                         <button
                           class="image-thumb-action"
@@ -699,7 +870,7 @@
                           type="button"
                           :aria-label="`重新生成图片${slot.index + 1}`"
                           title="重新生成"
-                          @click="generatePublishImage(slot.index)"
+                          @click.stop="generatePublishImage(slot.index)"
                         >
                           <IconGlyph name="refresh" />
                         </button>
@@ -864,13 +1035,6 @@
           </div>
 
           <article class="login-browser-frame">
-            <div class="login-window-title">
-              <span>登录账号：{{ activeXhsAccount ? getAccountDisplayName(activeXhsAccount) : '小红书账号' }}</span>
-              <div>
-                <button type="button">□</button>
-                <button type="button">×</button>
-              </div>
-            </div>
             <div class="browser-toolbar">
               <button type="button" title="后退" @click="goXhsBack"><IconGlyph name="arrowLeft" /></button>
               <button type="button" title="前进" @click="goXhsForward"><IconGlyph name="arrowRight" /></button>
@@ -945,16 +1109,12 @@
         <button class="modal-close" type="button" aria-label="关闭帮助" @click="closeHelpDialog">×</button>
         <div class="qr-dialog-body">
           <figure class="qr-item">
-            <span class="qr-art qr-art-one" aria-hidden="true">
-              <i>MDT</i>
-            </span>
+            <img class="qr-image" :src="supportQrUrl" alt="专属客服二维码" />
             <figcaption>专属客服</figcaption>
           </figure>
           <figure class="qr-item">
-            <span class="qr-art qr-art-two" aria-hidden="true">
-              <i>MDT</i>
-            </span>
-            <figcaption>关注我们</figcaption>
+            <img class="qr-image" :src="officialAccountQrUrl" alt="官方公众号二维码" />
+            <figcaption>官方公众号</figcaption>
           </figure>
         </div>
       </section>
@@ -975,6 +1135,177 @@
       </section>
     </div>
 
+    <div v-if="publishImagePreviewOpen" class="modal-scrim image-preview-scrim" @click.self="closePublishImagePreview">
+      <section class="image-preview-dialog" role="dialog" aria-modal="true" aria-label="图片预览">
+        <button class="modal-close" type="button" aria-label="关闭图片预览" @click="closePublishImagePreview">×</button>
+        <img :src="publishImagePreviewUrl" :alt="publishImagePreviewAlt" />
+      </section>
+    </div>
+
+    <div v-if="knowledgeBaseManagerOpen" class="modal-scrim" @click.self="closeKnowledgeBaseManager">
+      <section class="knowledge-manager-dialog" role="dialog" aria-modal="true" aria-label="管理知识库">
+        <header class="knowledge-manager-header">
+          <div>
+            <h2>管理知识库</h2>
+            <p>{{ knowledgeBases.length }}个知识库</p>
+          </div>
+          <div class="knowledge-manager-actions">
+            <button class="knowledge-add-button" type="button" @click="openKnowledgeBaseCreateDialog">
+              <IconGlyph name="plus" />
+              <span>新增</span>
+            </button>
+            <button class="modal-close" type="button" aria-label="关闭管理知识库" @click="closeKnowledgeBaseManager">
+              <img class="knowledge-close-icon" :src="closeIconUrl" alt="" aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        <div class="knowledge-manager-list">
+          <div
+            v-for="knowledgeBase in knowledgeBases"
+            :key="knowledgeBase.id"
+            class="knowledge-manager-item"
+            :class="{ active: selectedManagedKnowledgeBaseId === knowledgeBase.id }"
+            @click="openKnowledgeBaseDetail(knowledgeBase.id)"
+          >
+            <img class="knowledge-manager-icon" :src="knowledgeBaseDialogIconUrl" alt="" aria-hidden="true" />
+            <div class="knowledge-manager-meta">
+              <strong>{{ knowledgeBase.name }}</strong>
+              <span>{{ knowledgeBase.documentCount }} 篇文档 · 更新于 {{ knowledgeBase.updatedAt }}</span>
+            </div>
+            <button
+              class="knowledge-delete-button"
+              type="button"
+              :aria-label="`删除${knowledgeBase.name}`"
+              @click.stop="deleteKnowledgeBase(knowledgeBase.id)"
+            >
+              <IconGlyph name="trash" />
+            </button>
+          </div>
+
+          <div v-if="!knowledgeBases.length" class="knowledge-manager-empty">
+            <img class="knowledge-manager-icon" :src="knowledgeBaseDialogIconUrl" alt="" aria-hidden="true" />
+            <strong>暂无知识库</strong>
+          </div>
+        </div>
+
+        <footer class="knowledge-manager-footer">
+          <button type="button" @click="closeKnowledgeBaseManager">关闭</button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      v-if="knowledgeBaseDetailOpen && activeKnowledgeBase"
+      class="modal-scrim knowledge-detail-scrim"
+      @click.self="closeKnowledgeBaseDetailStack"
+    >
+      <section class="knowledge-detail-dialog" role="dialog" aria-modal="true" :aria-label="activeKnowledgeBase.name">
+        <header class="knowledge-detail-header">
+          <button class="knowledge-detail-back" type="button" aria-label="返回管理知识库" @click="backToKnowledgeBaseManager">
+            <IconGlyph name="arrowLeft" />
+          </button>
+          <div class="knowledge-detail-title">
+            <h2>{{ activeKnowledgeBase.name }}</h2>
+            <p>{{ activeKnowledgeBaseFileCount }} 个文件</p>
+          </div>
+          <button class="modal-close knowledge-detail-close" type="button" aria-label="关闭知识库详情" @click="closeKnowledgeBaseDetailStack">
+            <img class="knowledge-close-icon" :src="closeIconUrl" alt="" aria-hidden="true" />
+          </button>
+        </header>
+
+        <button
+          class="knowledge-upload-dropzone"
+          :class="{ active: knowledgeUploadDragActive }"
+          type="button"
+          @click="chooseKnowledgeBaseFiles"
+          @dragenter.prevent="knowledgeUploadDragActive = true"
+          @dragover.prevent="knowledgeUploadDragActive = true"
+          @dragleave.prevent="knowledgeUploadDragActive = false"
+          @drop.prevent="handleKnowledgeBaseFileDrop"
+        >
+          <span class="knowledge-upload-icon">
+            <IconGlyph name="upload" />
+          </span>
+          <strong>点击或拖拽上传文件</strong>
+          <em>支持 PDF、Word、Markdown、Excel、图片等格式</em>
+        </button>
+        <input
+          ref="knowledgeFileInputRef"
+          class="visually-hidden-input"
+          type="file"
+          multiple
+          :accept="`${KNOWLEDGE_BASE_FILE_ACCEPT},image/*`"
+          @change="handleKnowledgeBaseFileInput"
+        />
+
+        <div class="knowledge-file-list">
+          <div
+            v-for="document in activeKnowledgeBaseDocuments"
+            :key="document.id"
+            class="knowledge-file-item"
+            :class="{ featured: document.id === highlightedKnowledgeFileId }"
+          >
+            <span class="knowledge-file-icon" :class="`type-${getKnowledgeFileType(document.name)}`">
+              <IconGlyph name="document" />
+            </span>
+            <div class="knowledge-file-meta">
+              <strong>{{ document.name }}</strong>
+              <span>{{ formatKnowledgeFileSize(document.size) }} · {{ formatDateOnly(document.uploadedAt) }}</span>
+            </div>
+            <button
+              class="knowledge-file-delete"
+              type="button"
+              :aria-label="`删除${document.name}`"
+              @click.stop="deleteKnowledgeBaseDocument(document.id)"
+            >
+              <IconGlyph name="trash" />
+            </button>
+          </div>
+
+          <div v-if="!activeKnowledgeBaseDocuments.length" class="knowledge-file-empty">
+            <span class="knowledge-upload-icon">
+              <IconGlyph name="upload" />
+            </span>
+            <strong>暂无文件</strong>
+            <p>上传后的文件会显示在这里</p>
+          </div>
+        </div>
+
+        <footer class="knowledge-detail-footer">
+          <span>共 {{ activeKnowledgeBaseFileCount }} 个文件</span>
+          <button type="button" @click="finishKnowledgeBaseDetail">完成</button>
+        </footer>
+      </section>
+    </div>
+
+    <div v-if="knowledgeBaseCreateDialogOpen" class="modal-scrim knowledge-create-scrim" @click.self="closeKnowledgeBaseCreateDialog">
+      <section class="knowledge-create-dialog" role="dialog" aria-modal="true" aria-label="新增知识库">
+        <form class="knowledge-create-form" @submit.prevent="createKnowledgeBase">
+          <header class="knowledge-create-header">
+            <h2>新增知识库</h2>
+            <button class="modal-close knowledge-create-close" type="button" aria-label="关闭新增知识库" @click="closeKnowledgeBaseCreateDialog">
+              <img class="knowledge-close-icon" :src="closeIconUrl" alt="" aria-hidden="true" />
+            </button>
+          </header>
+
+          <label class="knowledge-create-field">
+            <span>知识库名称 <b>*</b></span>
+            <input v-model="knowledgeBaseDraftName" maxlength="30" type="text" placeholder="请输入知识库名称" autofocus />
+          </label>
+          <em class="knowledge-create-counter">{{ knowledgeBaseNameCount }}/{{ KNOWLEDGE_BASE_NAME_MAX_LENGTH }}</em>
+
+          <footer class="knowledge-create-footer">
+            <button class="knowledge-create-cancel" type="button" @click="closeKnowledgeBaseCreateDialog">取消</button>
+            <button class="knowledge-create-submit" :disabled="!canCreateKnowledgeBase" type="submit">
+              <IconGlyph name="plus" />
+              <span>创建知识库</span>
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
     <SettingsDialog v-model:visible="settingsVisible" />
   </div>
 </template>
@@ -984,15 +1315,19 @@ import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, rea
 import { useRoute, useRouter } from 'vue-router'
 import SettingsDialog from '@components/SettingsDialog.vue'
 import xiaohongshuLogoUrl from '../../../../assetes/xiaohongshu.png'
-import brandLogoUrl from '../../../../logo/名称+小字.svg'
 import accountManageIconUrl from '../../../../svgs/账号管理.svg'
 import helpIconUrl from '../../../../svgs/帮助.svg'
 import publishIconUrl from '../../../../svgs/发布.svg'
 import keywordIconUrl from '../../../../svgs/关键词.svg'
+import knowledgeBaseIconUrl from '../../../../svgs/知识库图标.svg'
+import knowledgeBaseDialogIconUrl from '../../../../svgs/知识库弹窗的知识库图标.svg'
+import disabledKnowledgeBaseIconUrl from '../../../../svgs/禁用知识库.svg'
+import closeIconUrl from '../../../../svgs/叉号.svg'
 import questionIconUrl from '../../../../svgs/问号.svg'
 import settingsIconUrl from '../../../../svgs/设置.svg'
-import videoIconUrl from '../../../../svgs/视频03-L.svg'
 import copywritingIconUrl from '../../../../svgs/文案.svg'
+import supportQrUrl from '@renderer/assets/images/support-qr.png'
+import officialAccountQrUrl from '@renderer/assets/images/official-account-qr.png'
 import {
   createImageGenerationTask,
   generateCopywriting,
@@ -1031,6 +1366,7 @@ type IconName =
   | 'key'
   | 'link'
   | 'message'
+  | 'plus'
   | 'refresh'
   | 'rocket'
   | 'search'
@@ -1048,6 +1384,7 @@ type SeoEntryRequest = {
   business: string
   features: string
   keywordCount: number
+  knowledgeBase: KnowledgeBaseReference | null
 }
 
 type CopyEntryRequest = {
@@ -1058,6 +1395,7 @@ type CopyEntryRequest = {
   articleCount: number
   platforms: string[]
   copyLength: CopyLength
+  knowledgeBase: KnowledgeBaseReference | null
 }
 
 type SeoGenerationEntry = {
@@ -1088,6 +1426,25 @@ type GenerationEntry = SeoGenerationEntry | CopyGenerationEntry
 type HistoryType = GenerationEntry['type']
 type PublishMode = 'article' | 'image'
 type CopyDropdownKey = 'articleCount' | 'copyLength'
+type KnowledgeBaseDropdownKey = 'seo' | 'copy'
+
+type KnowledgeBaseReference = {
+  id: string
+  name: string
+}
+
+type KnowledgeBase = KnowledgeBaseReference & {
+  documentCount: number
+  updatedAt: string
+  documents: KnowledgeBaseDocument[]
+}
+
+type KnowledgeBaseDocument = {
+  id: string
+  name: string
+  size: number
+  uploadedAt: number
+}
 
 type ChatSession = {
   id: string
@@ -1184,12 +1541,19 @@ type XiaohongshuWebviewElement = HTMLElement & {
   goForward: () => void
   loadURL: (url: string) => void
   reload: () => void
+  setZoomFactor?: (factor: number) => void
 }
 
 const SESSION_STORAGE_KEY = 'mdt-ai-agent.sessions.v1'
+const KNOWLEDGE_BASE_STORAGE_KEY = 'mdt-ai-agent.knowledge-bases.v1'
+const KNOWLEDGE_BASE_NONE_ID = 'none'
+const KNOWLEDGE_BASE_NAME_MAX_LENGTH = 30
+const KNOWLEDGE_BASE_FILE_ACCEPT = '.pdf,.doc,.docx,.md,.markdown,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif'
 const XIAOHONGSHU_HOME_URL = 'https://creator.xiaohongshu.com'
 const XIAOHONGSHU_LOGIN_URL = 'https://creator.xiaohongshu.com/login'
 const XHS_AVATAR_CLASSES = ['avatar-lake', 'avatar-forest', 'avatar-sea']
+const XHS_WEBVIEW_REFERENCE_WIDTH = 1180
+const XHS_WEBVIEW_MIN_ZOOM = 0.64
 
 const route = useRoute()
 const router = useRouter()
@@ -1199,6 +1563,19 @@ const copyArticleCountOptions = [1, 3, 5, 8]
 const copyLengthOptions: CopyLength[] = ['短', '中', '长']
 const copyLength = ref<CopyLength>('中')
 const copyDropdownOpen = ref<CopyDropdownKey | ''>('')
+const knowledgeBases = ref<KnowledgeBase[]>(loadKnowledgeBases())
+const selectedSeoKnowledgeBaseId = ref(KNOWLEDGE_BASE_NONE_ID)
+const selectedCopyKnowledgeBaseId = ref(KNOWLEDGE_BASE_NONE_ID)
+const selectedManagedKnowledgeBaseId = ref(knowledgeBases.value[0]?.id || '')
+const knowledgeBaseDropdownOpen = ref<KnowledgeBaseDropdownKey | ''>('')
+const knowledgeBaseManagerOpen = ref(false)
+const knowledgeBaseCreateDialogOpen = ref(false)
+const knowledgeBaseDraftName = ref('')
+const knowledgeBaseDetailOpen = ref(false)
+const selectedKnowledgeBaseDetailId = ref('')
+const knowledgeFileInputRef = ref<HTMLInputElement | null>(null)
+const knowledgeUploadDragActive = ref(false)
+const highlightedKnowledgeFileId = ref('')
 const sessions = ref<ChatSession[]>(loadSessions())
 const activeSessionId = ref(ensureInitialSessionId(sessions.value))
 const xiaohongshuWebviewRef = ref<XiaohongshuWebviewElement | null>(null)
@@ -1210,6 +1587,7 @@ const currentXhsUrl = ref(XIAOHONGSHU_HOME_URL)
 const xhsStartUrls = reactive<Record<string, string>>({})
 const brokenAvatarAccountIds = ref<Set<string>>(new Set())
 let xhsAutoSaveTimer: number | null = null
+let xhsWebviewResizeObserver: ResizeObserver | null = null
 const restoredXhsStorageAccountIds = new Set<string>()
 const activeHistoryType = ref<HistoryType>('seo')
 
@@ -1264,7 +1642,6 @@ const routeByPage: Record<PageKey, string> = {
 const primaryNav: SidebarNavItem[] = [
   { id: 'seo', page: 'seo', label: '关键词生成', iconUrl: keywordIconUrl },
   { id: 'copywriting', page: 'copywriting', label: '文案生成', iconUrl: copywritingIconUrl },
-  { id: 'video', label: '视频脚本生成', iconUrl: videoIconUrl },
   { id: 'publish', page: 'publish', label: '发布中心', iconUrl: publishIconUrl }
 ]
 
@@ -1303,6 +1680,7 @@ const iconPaths: Record<IconName, string[]> = {
   key: ['M15 7a4 4 0 1 0 2.8 6.8L22 18v3h-3v-2h-2v-2h-2l-1.8-1.8'],
   link: ['M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.2 1.2', 'M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.2-1.2'],
   message: ['M5 5h14v10H8l-3 3V5Z', 'M8 9h8', 'M8 12h5'],
+  plus: ['M12 5v14', 'M5 12h14'],
   refresh: ['M20 12a8 8 0 0 1-13.7 5.7', 'M4 12A8 8 0 0 1 17.7 6.3', 'M17 3v4h4', 'M7 21v-4H3'],
   rocket: ['M5 16c-1 1-1.5 2.5-1.5 4.5C5.5 20.5 7 20 8 19', 'M15 9l-6 6', 'M9 15l-1 4 4-1 7.5-7.5A8 8 0 0 0 21 3a8 8 0 0 0-7.5 1.5L6 12l3 3Z'],
   search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'M21 21l-4.3-4.3'],
@@ -1384,7 +1762,7 @@ const seoError = ref('')
 const seoResults = ref<SeoKeywordItem[]>([])
 const seoModel = ref('')
 const selectedSeoEntryId = ref('')
-const displayedSeoResults = computed(() => seoResults.value)
+const displayedSeoResults = computed(() => (seoLoading.value ? [] : seoResults.value))
 
 const socialPlatforms = ['小红书', '公众号']
 const copyForm = reactive({
@@ -1400,7 +1778,17 @@ const copyError = ref('')
 const copyResults = ref<CopywritingItem[]>([])
 const copyModel = ref('')
 const selectedCopyEntryId = ref('')
-const displayedCopyResults = computed(() => copyResults.value)
+const displayedCopyResults = computed(() => (copyLoading.value ? [] : copyResults.value))
+const copyResultSummary = computed(() => {
+  const keyword = copyForm.keyword.trim() || '未填写'
+  if (copyLoading.value) return `正在生成文案 · 关键词「${keyword}」`
+  return `共 ${displayedCopyResults.value.length} 篇文案 · 关键词「${keyword}」`
+})
+const knowledgeBaseNameCount = computed(() => knowledgeBaseDraftName.value.length)
+const canCreateKnowledgeBase = computed(() => Boolean(knowledgeBaseDraftName.value.trim()))
+const activeKnowledgeBase = computed(() => knowledgeBases.value.find((item) => item.id === selectedKnowledgeBaseDetailId.value) || null)
+const activeKnowledgeBaseDocuments = computed(() => activeKnowledgeBase.value?.documents || [])
+const activeKnowledgeBaseFileCount = computed(() => activeKnowledgeBaseDocuments.value.length)
 const tagInput = ref('')
 const PUBLISH_IMAGE_SLOT_COUNT = 3
 const MIN_PUBLISH_IMAGE_COUNT = 1
@@ -1430,6 +1818,8 @@ const publishImageFileInputRef = ref<HTMLInputElement | null>(null)
 const publishImageUploadTargetIndex = ref<number | null>(null)
 const publishCoverFileInputRef = ref<HTMLInputElement | null>(null)
 const publishCoverPreviewUrl = ref('')
+const publishImagePreviewUrl = ref('')
+const publishImagePreviewAlt = ref('')
 const helpDialogOpen = ref(false)
 const coverGuideDialogOpen = ref(false)
 const coverUploadAfterGuide = ref(false)
@@ -1437,6 +1827,14 @@ const generatedPublishImages = computed(() =>
   publishImageSlots.value.filter((slot) => isPublishImageSlotReadyForPublish(slot))
 )
 const articleInlineImageUrl = computed(() => generatedPublishImages.value[0]?.imageUrl || '')
+const publishImagePreviewOpen = computed(() => Boolean(publishImagePreviewUrl.value))
+const canGenerateNextPublishImage = computed(
+  () =>
+    !publishLoading.value &&
+    !publishImagePromptLoading.value &&
+    !publishImageAutoGenerating.value &&
+    getNextAvailablePublishImageSlotIndex() >= 0
+)
 const canUploadPublishImage = computed(
   () =>
     !publishLoading.value &&
@@ -1497,6 +1895,191 @@ function openHelpDialog() {
 
 function closeHelpDialog() {
   helpDialogOpen.value = false
+}
+
+function toggleKnowledgeBaseDropdown(target: KnowledgeBaseDropdownKey) {
+  const loading = target === 'seo' ? seoLoading.value : copyLoading.value
+  if (loading) return
+  knowledgeBaseDropdownOpen.value = knowledgeBaseDropdownOpen.value === target ? '' : target
+}
+
+function closeKnowledgeBaseDropdown() {
+  knowledgeBaseDropdownOpen.value = ''
+}
+
+function handleKnowledgeBaseDropdownFocusout(event: FocusEvent) {
+  const target = event.currentTarget
+  const nextTarget = event.relatedTarget
+  if (target instanceof Node && nextTarget instanceof Node && target.contains(nextTarget)) return
+  closeKnowledgeBaseDropdown()
+}
+
+function selectKnowledgeBase(target: KnowledgeBaseDropdownKey, knowledgeBaseId: string) {
+  const resolvedId = resolveKnowledgeBaseId(knowledgeBaseId)
+  if (target === 'seo') {
+    selectedSeoKnowledgeBaseId.value = resolvedId
+  } else {
+    selectedCopyKnowledgeBaseId.value = resolvedId
+  }
+  closeKnowledgeBaseDropdown()
+}
+
+function openKnowledgeBaseManager() {
+  const activeDropdown = knowledgeBaseDropdownOpen.value
+  const preferredId =
+    activeDropdown === 'seo'
+      ? selectedSeoKnowledgeBaseId.value
+      : activeDropdown === 'copy'
+        ? selectedCopyKnowledgeBaseId.value
+        : selectedManagedKnowledgeBaseId.value
+  closeKnowledgeBaseDropdown()
+  const resolvedId = resolveKnowledgeBaseId(preferredId)
+  selectedManagedKnowledgeBaseId.value = resolvedId === KNOWLEDGE_BASE_NONE_ID ? knowledgeBases.value[0]?.id || '' : resolvedId
+  knowledgeBaseManagerOpen.value = true
+}
+
+function closeKnowledgeBaseManager() {
+  knowledgeBaseManagerOpen.value = false
+  closeKnowledgeBaseCreateDialog()
+  closeKnowledgeBaseDetail()
+}
+
+function openKnowledgeBaseCreateDialog() {
+  knowledgeBaseDraftName.value = ''
+  knowledgeBaseCreateDialogOpen.value = true
+}
+
+function closeKnowledgeBaseCreateDialog() {
+  knowledgeBaseCreateDialogOpen.value = false
+  knowledgeBaseDraftName.value = ''
+}
+
+function createKnowledgeBase() {
+  const name = knowledgeBaseDraftName.value.trim()
+  if (!name) return
+
+  const knowledgeBase: KnowledgeBase = {
+    id: createId(),
+    name,
+    documentCount: 0,
+    updatedAt: formatDateOnly(Date.now()),
+    documents: []
+  }
+  knowledgeBases.value.push(knowledgeBase)
+  selectedManagedKnowledgeBaseId.value = knowledgeBase.id
+  closeKnowledgeBaseCreateDialog()
+}
+
+function openKnowledgeBaseDetail(knowledgeBaseId: string) {
+  const knowledgeBase = knowledgeBases.value.find((item) => item.id === knowledgeBaseId)
+  selectedManagedKnowledgeBaseId.value = knowledgeBaseId
+  selectedKnowledgeBaseDetailId.value = knowledgeBaseId
+  highlightedKnowledgeFileId.value = knowledgeBase?.documents[1]?.id || ''
+  knowledgeBaseDetailOpen.value = true
+}
+
+function closeKnowledgeBaseDetail() {
+  knowledgeBaseDetailOpen.value = false
+  selectedKnowledgeBaseDetailId.value = ''
+  highlightedKnowledgeFileId.value = ''
+  knowledgeUploadDragActive.value = false
+}
+
+function backToKnowledgeBaseManager() {
+  closeKnowledgeBaseDetail()
+}
+
+function closeKnowledgeBaseDetailStack() {
+  closeKnowledgeBaseDetail()
+  knowledgeBaseManagerOpen.value = false
+}
+
+function finishKnowledgeBaseDetail() {
+  closeKnowledgeBaseDetailStack()
+}
+
+function chooseKnowledgeBaseFiles() {
+  knowledgeFileInputRef.value?.click()
+}
+
+function handleKnowledgeBaseFileInput(event: Event) {
+  const input = event.target as HTMLInputElement
+  addKnowledgeBaseFiles(Array.from(input.files ?? []))
+  input.value = ''
+}
+
+function handleKnowledgeBaseFileDrop(event: DragEvent) {
+  knowledgeUploadDragActive.value = false
+  addKnowledgeBaseFiles(Array.from(event.dataTransfer?.files ?? []))
+}
+
+function addKnowledgeBaseFiles(files: File[]) {
+  if (!files.length) return
+  const knowledgeBase = activeKnowledgeBase.value
+  if (!knowledgeBase) return
+
+  const documents = files.map((file) => ({
+    id: createId(),
+    name: file.name,
+    size: file.size,
+    uploadedAt: Date.now()
+  }))
+  knowledgeBase.documents.unshift(...documents)
+  syncKnowledgeBaseDocumentStats(knowledgeBase)
+  highlightedKnowledgeFileId.value = documents[0]?.id || ''
+}
+
+function deleteKnowledgeBaseDocument(documentId: string) {
+  const knowledgeBase = activeKnowledgeBase.value
+  if (!knowledgeBase) return
+
+  const index = knowledgeBase.documents.findIndex((document) => document.id === documentId)
+  if (index < 0) return
+  knowledgeBase.documents.splice(index, 1)
+  syncKnowledgeBaseDocumentStats(knowledgeBase)
+}
+
+function syncKnowledgeBaseDocumentStats(knowledgeBase: KnowledgeBase) {
+  knowledgeBase.documentCount = knowledgeBase.documents.length
+  knowledgeBase.updatedAt = formatDateOnly(Date.now())
+}
+
+function deleteKnowledgeBase(knowledgeBaseId: string) {
+  const index = knowledgeBases.value.findIndex((item) => item.id === knowledgeBaseId)
+  if (index < 0) return
+
+  knowledgeBases.value.splice(index, 1)
+  if (selectedKnowledgeBaseDetailId.value === knowledgeBaseId) {
+    closeKnowledgeBaseDetail()
+  }
+  if (selectedSeoKnowledgeBaseId.value === knowledgeBaseId) {
+    selectedSeoKnowledgeBaseId.value = KNOWLEDGE_BASE_NONE_ID
+  }
+  if (selectedCopyKnowledgeBaseId.value === knowledgeBaseId) {
+    selectedCopyKnowledgeBaseId.value = KNOWLEDGE_BASE_NONE_ID
+  }
+  if (selectedManagedKnowledgeBaseId.value === knowledgeBaseId) {
+    selectedManagedKnowledgeBaseId.value = knowledgeBases.value[Math.max(0, index - 1)]?.id || knowledgeBases.value[0]?.id || ''
+  }
+}
+
+function getKnowledgeBaseLabel(target: KnowledgeBaseDropdownKey) {
+  return getSelectedKnowledgeBase(target)?.name || '不使用知识库'
+}
+
+function getSelectedKnowledgeBase(target: KnowledgeBaseDropdownKey) {
+  const selectedId = target === 'seo' ? selectedSeoKnowledgeBaseId.value : selectedCopyKnowledgeBaseId.value
+  return knowledgeBases.value.find((item) => item.id === selectedId) || null
+}
+
+function getKnowledgeBaseReference(target: KnowledgeBaseDropdownKey): KnowledgeBaseReference | null {
+  const knowledgeBase = getSelectedKnowledgeBase(target)
+  return knowledgeBase ? { id: knowledgeBase.id, name: knowledgeBase.name } : null
+}
+
+function resolveKnowledgeBaseId(knowledgeBaseId: string | undefined | null) {
+  if (!knowledgeBaseId || knowledgeBaseId === KNOWLEDGE_BASE_NONE_ID) return KNOWLEDGE_BASE_NONE_ID
+  return knowledgeBases.value.some((item) => item.id === knowledgeBaseId) ? knowledgeBaseId : KNOWLEDGE_BASE_NONE_ID
 }
 
 function openCoverGuideDialog() {
@@ -1588,6 +2171,7 @@ function hydrateSeoEntry(entry: SeoGenerationEntry) {
   seoForm.business = entry.request?.business || ''
   seoForm.features = entry.request?.features || ''
   seoForm.keywordCount = Number(entry.request?.keywordCount) || 10
+  selectedSeoKnowledgeBaseId.value = resolveKnowledgeBaseId(entry.request?.knowledgeBase?.id)
   seoResults.value = Array.isArray(entry.response?.items) ? entry.response.items : []
   seoModel.value = entry.response?.model || ''
   seoError.value = ''
@@ -1607,6 +2191,7 @@ function hydrateCopyEntry(entry: CopyGenerationEntry) {
   copyForm.articleCount = Number.isFinite(articleCount) && articleCount > 0 ? articleCount : 3
   copyForm.platform = restoredPlatform || '小红书'
   copyLength.value = normalizeCopyLength(entry.request?.copyLength)
+  selectedCopyKnowledgeBaseId.value = resolveKnowledgeBaseId(entry.request?.knowledgeBase?.id)
   copyResults.value = Array.isArray(entry.response?.items) ? entry.response.items : []
   copyModel.value = entry.response?.model || ''
   copyError.value = ''
@@ -1941,7 +2526,7 @@ function failGeneratingPublishImageSlots(message: string) {
     })
 }
 
-async function generateAllPublishImages() {
+async function generateNextPublishImage() {
   if (publishLoading.value || publishImageAutoGenerating.value) return
 
   publishError.value = ''
@@ -1950,21 +2535,15 @@ async function generateAllPublishImages() {
 
   try {
     assertPublishImagePromptPrerequisites()
-    const targetIndexes = publishImageSlots.value
-      .filter((slot) => slot.status !== 'ready')
-      .map((slot) => slot.index)
+    const targetIndex = getNextAvailablePublishImageSlotIndex()
 
-    if (!targetIndexes.length) return
+    if (targetIndex < 0) return
 
     publishImageAutoGenerating.value = true
-    for (const slotIndex of targetIndexes) {
-      markPublishImageSlotGenerating(slotIndex, sourceKey)
-    }
+    markPublishImageSlotGenerating(targetIndex, sourceKey)
 
     await ensurePublishImagePrompts()
-    for (const slotIndex of targetIndexes) {
-      await generatePublishImage(slotIndex, { reuseGeneratingSlot: true })
-    }
+    await generatePublishImage(targetIndex, { reuseGeneratingSlot: true })
   } catch (error) {
     const message = getErrorMessage(error)
     publishError.value = message
@@ -2167,6 +2746,39 @@ function readPublishImagePreviewUrl(file: File) {
 
 function getPublishImageFilePath(file: File) {
   return (file as PublishImageFile).path || ''
+}
+
+function canPreviewPublishImage(slot: PublishImageSlot) {
+  return slot.status === 'ready' && Boolean(slot.imageUrl)
+}
+
+function openFirstPublishImagePreview() {
+  const slot = generatedPublishImages.value[0]
+  if (slot) openPublishImagePreview(slot)
+}
+
+function openPublishImagePreview(slot: PublishImageSlot) {
+  if (!canPreviewPublishImage(slot)) return
+
+  publishImagePreviewUrl.value = slot.imageUrl
+  publishImagePreviewAlt.value = slot.name ? `${slot.name}预览` : `图片${slot.index + 1}预览`
+}
+
+function closePublishImagePreview() {
+  publishImagePreviewUrl.value = ''
+  publishImagePreviewAlt.value = ''
+}
+
+function deletePublishImage(slotIndex: number) {
+  if (publishLoading.value || publishImageAutoGenerating.value) return
+
+  const slot = publishImageSlots.value[slotIndex]
+  if (!slot || slot.status !== 'ready') return
+
+  if (publishImagePreviewUrl.value === slot.imageUrl) {
+    closePublishImagePreview()
+  }
+  setPublishImageSlot(slotIndex, createPublishImageSlot(slotIndex))
 }
 
 function getNextAvailablePublishImageSlotIndex(startIndex = 0) {
@@ -2414,6 +3026,8 @@ function navigateXhsWebview(url: string) {
 
 async function handleXhsDomReady() {
   syncCurrentXhsUrl()
+  await nextTick()
+  observeXhsWebviewSize()
   await restoreXhsWebStorage()
 }
 
@@ -2429,6 +3043,38 @@ function syncCurrentXhsUrl() {
   if (url) {
     currentXhsUrl.value = url
   }
+}
+
+function disconnectXhsWebviewResizeObserver() {
+  xhsWebviewResizeObserver?.disconnect()
+  xhsWebviewResizeObserver = null
+}
+
+function observeXhsWebviewSize() {
+  disconnectXhsWebviewResizeObserver()
+
+  const webview = getXhsWebview()
+  if (!webview) return
+
+  syncXhsWebviewScale()
+  if (typeof ResizeObserver === 'undefined') return
+
+  xhsWebviewResizeObserver = new ResizeObserver(() => {
+    syncXhsWebviewScale()
+  })
+  xhsWebviewResizeObserver.observe(webview)
+}
+
+function syncXhsWebviewScale() {
+  const webview = getXhsWebview()
+  if (!webview?.setZoomFactor) return
+
+  const width = webview.clientWidth
+  if (!width) return
+
+  // 小红书创作者站偏桌面宽度，窄窗口下缩放内容避免横向挤出。
+  const zoomFactor = Math.max(XHS_WEBVIEW_MIN_ZOOM, Math.min(1, width / XHS_WEBVIEW_REFERENCE_WIDTH))
+  webview.setZoomFactor(Number(zoomFactor.toFixed(2)))
 }
 
 function scheduleAutoSaveXhsSession() {
@@ -2782,6 +3428,7 @@ function analyzeTrends() {
 }
 
 async function submitSeo() {
+  clearSeoGenerationOutput()
   const validation = validateSeoForm()
   if (validation) {
     seoError.value = validation
@@ -2793,7 +3440,8 @@ async function submitSeo() {
   const requestPayload: SeoEntryRequest = {
     business: seoForm.business.trim(),
     features: seoForm.features.trim(),
-    keywordCount: Number(seoForm.keywordCount)
+    keywordCount: Number(seoForm.keywordCount),
+    knowledgeBase: getKnowledgeBaseReference('seo')
   }
 
   try {
@@ -2823,22 +3471,23 @@ async function submitSeo() {
 }
 
 function resetSeoResults() {
-  seoResults.value = []
-  seoModel.value = ''
-  selectedSeoEntryId.value = ''
+  clearSeoGenerationOutput()
 }
 
 async function prepareCopyFromKeyword(keyword: string) {
+  clearCopyGenerationOutput()
+  copyError.value = ''
   copyForm.keyword = keyword
   copyForm.business = seoForm.business.trim()
   copyForm.features = seoForm.features.trim()
   copyForm.keywordOccurrences = Math.max(copyForm.keywordOccurrences, 1)
-  selectedCopyEntryId.value = ''
+  selectedCopyKnowledgeBaseId.value = selectedSeoKnowledgeBaseId.value
   await router.push(routeByPage.copywriting)
   await nextTick()
 }
 
 async function submitCopy() {
+  clearCopyGenerationOutput()
   const validation = validateCopyForm()
   if (validation) {
     copyError.value = validation
@@ -2854,7 +3503,8 @@ async function submitCopy() {
     keywordOccurrences: Number(copyForm.keywordOccurrences),
     articleCount: Number(copyForm.articleCount),
     platforms: [copyForm.platform],
-    copyLength: copyLength.value
+    copyLength: copyLength.value,
+    knowledgeBase: getKnowledgeBaseReference('copy')
   }
 
   try {
@@ -2884,6 +3534,18 @@ async function submitCopy() {
   } finally {
     copyLoading.value = false
   }
+}
+
+function clearSeoGenerationOutput() {
+  seoResults.value = []
+  seoModel.value = ''
+  selectedSeoEntryId.value = ''
+}
+
+function clearCopyGenerationOutput() {
+  copyResults.value = []
+  copyModel.value = ''
+  selectedCopyEntryId.value = ''
 }
 
 function validateSeoForm() {
@@ -2955,6 +3617,91 @@ function loadSessions(): ChatSession[] {
   }
 }
 
+function loadKnowledgeBases(): KnowledgeBase[] {
+  try {
+    const raw = localStorage.getItem(KNOWLEDGE_BASE_STORAGE_KEY)
+    if (!raw) return createDefaultKnowledgeBases()
+    const parsed = JSON.parse(raw) as KnowledgeBase[]
+    if (!Array.isArray(parsed)) return createDefaultKnowledgeBases()
+    const defaultKnowledgeBases = createDefaultKnowledgeBases()
+    const normalized = parsed
+      .map((item) => {
+        const fallback = defaultKnowledgeBases.find((knowledgeBase) => knowledgeBase.id === item?.id)
+        const documents = normalizeKnowledgeBaseDocuments(item?.documents, fallback?.documents || [])
+        const latestUploadedAt = documents.reduce((latest, document) => Math.max(latest, document.uploadedAt), 0)
+        return {
+          id: String(item?.id || '').trim(),
+          name: String(item?.name || '').trim(),
+          documentCount: documents.length,
+          updatedAt: String(item?.updatedAt || '').trim() || (latestUploadedAt ? formatDateOnly(latestUploadedAt) : fallback?.updatedAt || ''),
+          documents
+        }
+      })
+      .filter((item) => item.id && item.name)
+    return normalized.length ? normalized : createDefaultKnowledgeBases()
+  } catch (error) {
+    console.warn('读取知识库列表失败', error)
+    return createDefaultKnowledgeBases()
+  }
+}
+
+function saveKnowledgeBases(items: KnowledgeBase[]) {
+  localStorage.setItem(KNOWLEDGE_BASE_STORAGE_KEY, JSON.stringify(items))
+}
+
+function createDefaultKnowledgeBases(): KnowledgeBase[] {
+  const productDocuments = [
+    createKnowledgeDocument('kb-1-doc-prd', '产品需求文档.pdf', 2.4 * 1024 * 1024, '2026-06-20'),
+    createKnowledgeDocument('kb-1-doc-manual', '用户手册_v2.docx', 1.1 * 1024 * 1024, '2026-06-18'),
+    createKnowledgeDocument('kb-1-doc-api', 'API接口文档.md', 320 * 1024, '2026-06-15'),
+    createKnowledgeDocument('kb-1-doc-architecture', '技术架构说明.pdf', 4.7 * 1024 * 1024, '2026-06-12'),
+    createKnowledgeDocument('kb-1-doc-analysis', '竞品分析表.xlsx', 860 * 1024, '2026-06-10')
+  ]
+  const operationDocuments = [
+    createKnowledgeDocument('kb-2-doc-plan', '运营投放计划.xlsx', 940 * 1024, '2026-06-18'),
+    createKnowledgeDocument('kb-2-doc-copy', '高转化文案库.md', 260 * 1024, '2026-06-17'),
+    createKnowledgeDocument('kb-2-doc-channel', '渠道复盘报告.pdf', 1.8 * 1024 * 1024, '2026-06-12')
+  ]
+  const productDocDocuments = [
+    createKnowledgeDocument('kb-product-docs-doc-roadmap', '产品路线图.pdf', 3.1 * 1024 * 1024, '2026-06-15'),
+    createKnowledgeDocument('kb-product-docs-doc-faq', 'FAQ知识整理.md', 180 * 1024, '2026-06-11')
+  ]
+
+  return [
+    { id: 'kb-1', name: '知识库1', documentCount: productDocuments.length, updatedAt: '2026-06-20', documents: productDocuments },
+    { id: 'kb-2', name: '知识库2', documentCount: operationDocuments.length, updatedAt: '2026-06-18', documents: operationDocuments },
+    {
+      id: 'kb-product-docs',
+      name: '产品文档库',
+      documentCount: productDocDocuments.length,
+      updatedAt: '2026-06-15',
+      documents: productDocDocuments
+    }
+  ]
+}
+
+function createKnowledgeDocument(id: string, name: string, size: number, date: string): KnowledgeBaseDocument {
+  return {
+    id,
+    name,
+    size: Math.round(size),
+    uploadedAt: new Date(`${date}T00:00:00`).getTime()
+  }
+}
+
+function normalizeKnowledgeBaseDocuments(value: unknown, fallback: KnowledgeBaseDocument[]): KnowledgeBaseDocument[] {
+  if (!Array.isArray(value)) return fallback.map((document) => ({ ...document }))
+
+  return value
+    .map((document) => ({
+      id: String(document?.id || createId()).trim(),
+      name: String(document?.name || '').trim(),
+      size: Math.max(0, Number(document?.size) || 0),
+      uploadedAt: Number(document?.uploadedAt) || Date.now()
+    }))
+    .filter((document) => document.id && document.name)
+}
+
 function saveSessions(items: ChatSession[]) {
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(items))
 }
@@ -2983,6 +3730,31 @@ function formatDateTime(timestamp: number) {
   })
 }
 
+function formatDateOnly(timestamp: number) {
+  return new Date(timestamp).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).replace(/\//g, '-')
+}
+
+function formatKnowledgeFileSize(size: number) {
+  const kilobyte = 1024
+  const megabyte = kilobyte * 1024
+  if (size < megabyte) return `${Math.max(1, Math.round(size / kilobyte))} KB`
+  return `${(size / megabyte).toFixed(1)} MB`
+}
+
+function getKnowledgeFileType(fileName: string) {
+  const extension = fileName.split('.').pop()?.toLowerCase() || ''
+  if (extension === 'pdf') return 'pdf'
+  if (['doc', 'docx'].includes(extension)) return 'word'
+  if (['md', 'markdown'].includes(extension)) return 'markdown'
+  if (['xls', 'xlsx', 'csv'].includes(extension)) return 'excel'
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(extension)) return 'image'
+  return 'default'
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
   return '请求失败，请检查模型设置或稍后重试'
@@ -3003,6 +3775,14 @@ watch(
 )
 
 watch(
+  knowledgeBases,
+  (items) => {
+    saveKnowledgeBases(items)
+  },
+  { deep: true }
+)
+
+watch(
   loggedInPublishAccounts,
   (publishAccounts) => {
     const availableAccountIds = new Set(publishAccounts.map((account) => account.id))
@@ -3017,6 +3797,18 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => [visiblePage.value, activeXhsAccountId.value],
+  ([page]) => {
+    if (page !== 'accounts') {
+      disconnectXhsWebviewResizeObserver()
+      return
+    }
+
+    void nextTick().then(observeXhsWebviewSize)
+  }
+)
+
 onMounted(() => {
   document.title = 'Market Sales'
   void loadXhsAccounts()
@@ -3026,6 +3818,7 @@ onBeforeUnmount(() => {
   if (xhsAutoSaveTimer) {
     window.clearTimeout(xhsAutoSaveTimer)
   }
+  disconnectXhsWebviewResizeObserver()
   if (publishCoverPreviewUrl.value) {
     URL.revokeObjectURL(publishCoverPreviewUrl.value)
   }
@@ -3112,24 +3905,6 @@ onBeforeUnmount(() => {
   border-right: 1px solid var(--outline);
   background: #ffffff;
   padding: 28px 14px 24px;
-}
-
-.suite-brand {
-  display: flex;
-  height: 76px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  margin-bottom: 24px;
-}
-
-.suite-brand img {
-  display: block;
-  width: 100%;
-  max-width: 206px;
-  max-height: 64px;
-  object-fit: contain;
-  object-position: center;
 }
 
 .suite-nav {
@@ -3822,6 +4597,89 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+.generation-loading-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  border: 1px solid #dbe6ff;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, var(--primary-faint) 100%);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.generation-loading-state strong {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.generation-spinner {
+  position: relative;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #dbe6ff;
+}
+
+.generation-spinner::before {
+  position: absolute;
+  inset: 5px;
+  border: 3px solid #dbe6ff;
+  border-top-color: var(--primary);
+  border-radius: inherit;
+  animation: generation-spin 0.9s linear infinite;
+  content: '';
+}
+
+.generation-spinner span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: generation-pulse 1.2s ease-in-out infinite;
+}
+
+.generation-skeleton {
+  display: grid;
+  width: min(320px, 78%);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.generation-skeleton span {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eefc;
+}
+
+.generation-skeleton span::before {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.28), transparent);
+  animation: generation-shimmer 1.15s ease-in-out infinite;
+  content: '';
+}
+
+.generation-skeleton span:nth-child(2) {
+  width: 86%;
+  justify-self: center;
+}
+
+.generation-skeleton span:nth-child(3) {
+  width: 68%;
+  justify-self: center;
+}
+
 .result-tags span {
   min-height: 34px;
   font-size: 15px;
@@ -4202,6 +5060,35 @@ onBeforeUnmount(() => {
   line-height: 18px;
 }
 
+@keyframes generation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes generation-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes generation-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(240%);
+  }
+}
+
 @keyframes publish-image-pulse {
   0%,
   100% {
@@ -4216,6 +5103,14 @@ onBeforeUnmount(() => {
 @keyframes publish-image-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-spinner::before,
+  .generation-spinner span,
+  .generation-skeleton span::before {
+    animation: none;
   }
 }
 
@@ -4382,9 +5277,11 @@ onBeforeUnmount(() => {
 
 .account-strip {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 14px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   border-bottom: 1px solid #cdd3df;
   border-radius: 0;
   background: #ffffff;
@@ -4395,7 +5292,9 @@ onBeforeUnmount(() => {
 .account-chip {
   position: relative;
   display: inline-grid;
+  width: clamp(240px, 22vw, 282px);
   min-width: 282px;
+  max-width: 360px;
   height: 74px;
   grid-template-columns: 46px minmax(0, 1fr);
   grid-template-rows: 26px 18px;
@@ -4519,6 +5418,7 @@ onBeforeUnmount(() => {
 
 .account-actions {
   display: flex;
+  min-width: 0;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
@@ -4529,7 +5429,9 @@ onBeforeUnmount(() => {
 .account-actions button {
   display: inline-flex;
   flex: 0 0 auto;
+  max-width: 100%;
   min-height: 38px;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -4569,38 +5471,21 @@ onBeforeUnmount(() => {
 
 .login-browser-frame {
   display: grid;
+  min-width: 0;
   min-height: 0;
   height: 100%;
-  grid-template-rows: 30px 34px minmax(0, 1fr);
+  grid-template-rows: minmax(34px, auto) minmax(0, 1fr);
   overflow: hidden;
   background: #ffffff;
 }
 
-.login-window-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid #eef1f6;
-  background: #ffffff;
-  color: #4b5563;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 0 10px;
-}
-
-.login-window-title button {
-  border: 0;
-  background: transparent;
-  color: #8b95a3;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-}
-
 .browser-toolbar {
   display: flex;
+  min-width: 0;
+  min-height: 34px;
   align-items: center;
   gap: 12px;
+  overflow: hidden;
   border-top: 1px solid #edf0f5;
   border-bottom: 1px solid #edf0f5;
   background: #ffffff;
@@ -4611,6 +5496,7 @@ onBeforeUnmount(() => {
   display: grid;
   width: 18px;
   height: 18px;
+  flex: 0 0 18px;
   place-items: center;
   border: 0;
   background: transparent;
@@ -4626,7 +5512,7 @@ onBeforeUnmount(() => {
 
 .browser-toolbar span {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 180px;
   overflow: hidden;
   border-radius: 16px;
   background: #f2f3f5;
@@ -4640,6 +5526,8 @@ onBeforeUnmount(() => {
 
 .browser-toolbar em,
 .browser-toolbar small {
+  min-width: 0;
+  flex: 0 1 auto;
   max-width: 180px;
   overflow: hidden;
   color: #7d8794;
@@ -4655,6 +5543,7 @@ onBeforeUnmount(() => {
 
 .xiaohongshu-webview-wrap {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   height: 100%;
   min-height: 0;
@@ -4662,9 +5551,11 @@ onBeforeUnmount(() => {
 }
 
 .xiaohongshu-webview {
+  display: inline-flex;
   flex: 1;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   background: #ffffff;
 }
@@ -4846,31 +5737,19 @@ onBeforeUnmount(() => {
 }
 
 .suite-sidebar {
-  width: 116px;
-  flex-basis: 116px;
+  width: clamp(86px, 8vw, 116px);
+  flex-basis: clamp(86px, 8vw, 116px);
   align-items: center;
+  overflow-y: auto;
   border-right: 1px solid var(--outline);
   border-bottom-left-radius: 18px;
   background: #ffffff;
   padding: 16px 0 18px;
+  scrollbar-width: none;
 }
 
-.suite-brand {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: flex-start;
-  margin-bottom: 36px;
-  padding-left: 10px;
-}
-
-.suite-brand img {
-  display: block;
-  width: 84px;
-  height: auto;
-  max-height: 38px;
-  object-fit: contain;
-  object-position: left center;
+.suite-sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 .suite-nav {
@@ -5106,7 +5985,7 @@ onBeforeUnmount(() => {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: clamp(280px, 26vw, 380px) minmax(0, 1fr);
 }
 
 .reference-config-panel {
@@ -5379,7 +6258,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   min-height: 0;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: clamp(280px, 26vw, 380px) minmax(0, 1fr);
   gap: 0;
   margin: 0;
 }
@@ -5436,6 +6315,7 @@ onBeforeUnmount(() => {
   color: #374151;
   font-size: 15px;
   font-weight: 700;
+  margin-bottom: 6px;
   padding: 0;
 }
 
@@ -5444,7 +6324,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   border: 1px solid var(--outline);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--primary-faint);
   padding: 4px;
 }
@@ -5456,7 +6336,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: #374151;
   font-weight: 700;
@@ -5490,7 +6370,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   border: 1px solid var(--outline);
-  border-radius: 10px;
+  border-radius: 8px;
   outline: none;
   background: #ffffff;
   color: var(--text);
@@ -5546,15 +6426,10 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 4px;
   border: 1px solid #b4c5ff;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #ffffff;
   padding: 6px;
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
-}
-
-.reference-copy-page .custom-select-menu {
-  top: auto;
-  bottom: calc(100% + 7px);
 }
 
 .custom-select-option {
@@ -5585,6 +6460,88 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
+.knowledge-base-field {
+  margin-bottom: 20px;
+}
+
+.knowledge-select-trigger {
+  height: 44px;
+  border-radius: 8px;
+  color: #9ca3af;
+  padding: 0 16px;
+}
+
+.knowledge-trigger-label {
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-select-menu {
+  gap: 0;
+  overflow: hidden;
+  border-color: #eef0fb;
+  padding: 0;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
+}
+
+.knowledge-select-option {
+  min-height: 38px;
+  gap: 8px;
+  border-radius: 0;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+.knowledge-select-option.selected {
+  background: #f0eff9;
+  color: #4b5563;
+  font-weight: 800;
+}
+
+.knowledge-option-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  object-fit: contain;
+}
+
+.knowledge-option-icon.disabled {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+}
+
+.knowledge-option-check {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  color: var(--primary);
+  stroke-width: 2.2;
+}
+
+.knowledge-manage-option {
+  min-height: 40px;
+  border: 0;
+  border-top: 1px solid #eef0fb;
+  background: #ffffff;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.knowledge-manage-option:hover,
+.knowledge-manage-option:focus-visible {
+  outline: none;
+  background: var(--primary-faint);
+}
+
 .copy-workspace-header {
   min-height: 96px;
 }
@@ -5606,6 +6563,11 @@ onBeforeUnmount(() => {
   border: 1px dashed #dfe4ee;
   border-radius: 16px;
   background: #ffffff;
+}
+
+.reference-copy-page .copy-generation-loading {
+  min-height: calc(100vh - 196px);
+  border-radius: 16px;
 }
 
 .reference-copy-page .copy-output {
@@ -5767,7 +6729,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   min-height: 0;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: clamp(140px, 16vw, 220px) minmax(0, 1fr);
   gap: 0;
   margin: 0;
 }
@@ -5820,11 +6782,11 @@ onBeforeUnmount(() => {
 }
 
 .publish-article-workbench {
-  grid-template-columns: minmax(0, 1fr) 432px;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 30vw, 460px);
 }
 
 .publish-image-workbench {
-  grid-template-columns: minmax(0, 1fr) 510px;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 540px);
 }
 
 .publish-editor-column {
@@ -5987,6 +6949,12 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border-radius: 6px;
   background: #f3f4f6;
+  cursor: zoom-in;
+}
+
+.article-inline-image:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 3px;
 }
 
 .article-inline-image img {
@@ -6000,6 +6968,7 @@ onBeforeUnmount(() => {
   display: grid;
   min-width: 0;
   min-height: 0;
+  container-type: inline-size;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 34px;
 }
@@ -6026,29 +6995,31 @@ onBeforeUnmount(() => {
 }
 
 .image-edit-strip {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  overflow-x: auto;
+  --publish-image-thumb-min: 112px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--publish-image-thumb-min)), 1fr));
+  align-items: start;
+  gap: clamp(14px, 2.2cqw, 24px);
+  overflow: visible;
   padding: 2px 2px 6px;
 }
 
 .image-add-tile,
 .image-thumb-preview {
   display: grid;
-  width: 140px;
-  height: 140px;
-  flex: 0 0 140px;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
   place-items: center;
   overflow: hidden;
   border-radius: 8px;
   background: #ffffff;
-  cursor: pointer;
 }
 
 .image-add-tile {
   border: 2px dashed #d9dee8;
   color: #9ca3af;
+  cursor: pointer;
 }
 
 .image-add-tile svg {
@@ -6063,6 +7034,8 @@ onBeforeUnmount(() => {
 
 .image-edit-thumb {
   display: grid;
+  min-width: 0;
+  width: 100%;
   gap: 8px;
   margin: 0;
 }
@@ -6070,7 +7043,17 @@ onBeforeUnmount(() => {
 .image-thumb-preview {
   position: relative;
   border: 1px solid #e5e7eb;
+  cursor: default;
   padding: 0;
+}
+
+.image-thumb-preview.is-previewable {
+  cursor: zoom-in;
+}
+
+.image-thumb-preview:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 3px;
 }
 
 .image-edit-thumb.status-generating .image-thumb-preview {
@@ -6165,6 +7148,11 @@ onBeforeUnmount(() => {
   color: var(--primary);
 }
 
+.image-thumb-delete:hover {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
 .image-thumb-action:disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -6176,7 +7164,7 @@ onBeforeUnmount(() => {
 }
 
 .image-edit-thumb figcaption {
-  max-width: 140px;
+  max-width: 100%;
   color: #b91c1c;
   font-size: 12px;
   line-height: 17px;
@@ -6516,14 +7504,14 @@ onBeforeUnmount(() => {
 }
 
 .reference-publish-page.mode-article .publish-workbench {
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 360px);
   gap: 24px;
   background: #f8f9ff;
   padding: 22px 24px;
 }
 
 .reference-publish-page.mode-article .publish-article-panel {
-  width: 330px;
+  width: clamp(260px, 24vw, 360px);
   height: min(100%, 658px);
   align-self: start;
   gap: 0;
@@ -6827,7 +7815,11 @@ onBeforeUnmount(() => {
 }
 
 .qr-dialog,
-.cover-guide-dialog {
+.cover-guide-dialog,
+.image-preview-dialog,
+.knowledge-manager-dialog,
+.knowledge-detail-dialog,
+.knowledge-create-dialog {
   position: relative;
   border: 1px solid rgba(229, 231, 235, 0.9);
   border-radius: 18px;
@@ -6839,6 +7831,36 @@ onBeforeUnmount(() => {
   width: min(654px, calc(100vw - 48px));
   min-height: 390px;
   padding: 86px 84px 70px;
+}
+
+.image-preview-scrim {
+  padding: 24px;
+}
+
+.image-preview-dialog {
+  display: grid;
+  width: min(960px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  place-items: center;
+  padding: 48px 16px 16px;
+  border-radius: 12px;
+  background: #111827;
+}
+
+.image-preview-dialog .modal-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.image-preview-dialog img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 112px);
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .modal-close {
@@ -6867,16 +7889,666 @@ onBeforeUnmount(() => {
   right: 18px;
 }
 
+.knowledge-manager-dialog {
+  display: grid;
+  width: min(580px, calc(100vw - 32px));
+  min-height: 412px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.knowledge-manager-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 24px 18px;
+}
+
+.knowledge-manager-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 28px;
+}
+
+.knowledge-manager-header p {
+  margin: 3px 0 0;
+  color: #a3adbd;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.knowledge-manager-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.knowledge-add-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 88px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 0 18px;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
+  white-space: nowrap;
+}
+
+.knowledge-add-button:hover {
+  background: var(--primary-hover);
+}
+
+.knowledge-add-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.knowledge-close-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.knowledge-manager-list {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 16px 18px 24px;
+}
+
+.knowledge-manager-item {
+  display: grid;
+  min-height: 70px;
+  grid-template-columns: 44px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 13px;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  padding: 10px 12px;
+}
+
+.knowledge-manager-item.active {
+  background: #f4f4fc;
+}
+
+.knowledge-manager-icon {
+  display: block;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.knowledge-manager-meta {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.knowledge-manager-meta strong {
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 23px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-manager-meta span {
+  overflow: hidden;
+  color: #a3adbd;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-delete-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a3adbd;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.knowledge-manager-item:hover .knowledge-delete-button,
+.knowledge-manager-item.active .knowledge-delete-button {
+  opacity: 1;
+}
+
+.knowledge-delete-button:hover {
+  background: #ffffff;
+  color: #ef4444;
+}
+
+.knowledge-delete-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.knowledge-manager-empty {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #9ca3af;
+}
+
+.knowledge-manager-footer {
+  display: flex;
+  min-height: 74px;
+  align-items: center;
+  justify-content: flex-end;
+  border-top: 1px solid #f1f2f7;
+  padding: 16px 26px;
+}
+
+.knowledge-manager-footer button {
+  min-width: 78px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.knowledge-manager-footer button:hover {
+  background: #e9edf4;
+}
+
+.knowledge-detail-scrim {
+  z-index: 88;
+}
+
+.knowledge-detail-dialog {
+  display: grid;
+  width: min(700px, calc(100vw - 24px));
+  height: min(712px, calc(100vh - 24px));
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 30px;
+}
+
+.knowledge-detail-header {
+  display: grid;
+  min-height: 110px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: flex-start;
+  gap: 14px;
+  border-bottom: 1px solid #f1f2f7;
+  padding: 30px 30px 20px;
+}
+
+.knowledge-detail-back,
+.knowledge-detail-close {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #aeb7c6;
+  cursor: pointer;
+}
+
+.knowledge-detail-back:hover,
+.knowledge-detail-close:hover {
+  background: #f7f8fb;
+  color: #6b7280;
+}
+
+.knowledge-detail-back svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.3;
+}
+
+.knowledge-detail-close {
+  justify-self: end;
+}
+
+.knowledge-detail-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.knowledge-detail-title h2 {
+  overflow: hidden;
+  margin: 0;
+  color: #111827;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 34px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-detail-title p {
+  margin: 0;
+  color: #adb5c3;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 26px;
+}
+
+.knowledge-upload-dropzone {
+  display: grid;
+  min-height: 166px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  margin: 20px 30px 16px;
+  border: 2px dashed #e1e5ee;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #303747;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.knowledge-upload-dropzone:hover,
+.knowledge-upload-dropzone.active {
+  border-color: #b9bbff;
+  background: #fbfbff;
+  box-shadow: inset 0 0 0 1px rgba(143, 146, 255, 0.14);
+}
+
+.knowledge-upload-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eeeaff;
+  color: #8d8dff;
+}
+
+.knowledge-upload-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.1;
+}
+
+.knowledge-upload-dropzone strong {
+  margin-top: 2px;
+  color: #3e4657;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 24px;
+}
+
+.knowledge-upload-dropzone em {
+  color: #a7afbf;
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 22px;
+}
+
+.knowledge-file-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 4px 20px 16px 30px;
+}
+
+.knowledge-file-list::-webkit-scrollbar {
+  width: 12px;
+}
+
+.knowledge-file-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.knowledge-file-list::-webkit-scrollbar-thumb {
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  background: #8b8b8b;
+}
+
+.knowledge-file-item {
+  display: grid;
+  min-height: 70px;
+  grid-template-columns: 46px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 12px;
+  border-radius: 16px;
+  padding: 9px 12px 9px 6px;
+}
+
+.knowledge-file-item:hover,
+.knowledge-file-item.featured {
+  background: #fbfcff;
+}
+
+.knowledge-file-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.knowledge-file-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2;
+}
+
+.knowledge-file-icon.type-pdf {
+  background: #fff0f2;
+  color: #ff5a67;
+}
+
+.knowledge-file-icon.type-word {
+  background: #eef6ff;
+  color: #4d96ff;
+}
+
+.knowledge-file-icon.type-markdown,
+.knowledge-file-icon.type-excel {
+  background: #ecfbf2;
+  color: #28b66f;
+}
+
+.knowledge-file-icon.type-image {
+  background: #f0edff;
+  color: #8b8fff;
+}
+
+.knowledge-file-icon.type-default {
+  background: #f2f4f8;
+  color: #8b94a4;
+}
+
+.knowledge-file-meta {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.knowledge-file-meta strong {
+  overflow: hidden;
+  color: #344054;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-file-meta span {
+  overflow: hidden;
+  color: #a5aebd;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-file-delete {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #d5d9e2;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.knowledge-file-item:hover .knowledge-file-delete,
+.knowledge-file-item.featured .knowledge-file-delete {
+  opacity: 1;
+}
+
+.knowledge-file-delete:hover {
+  background: #ffffff;
+  color: #ef4444;
+}
+
+.knowledge-file-delete svg {
+  width: 18px;
+  height: 18px;
+}
+
+.knowledge-file-empty {
+  display: grid;
+  min-height: 170px;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  color: #a5aebd;
+  text-align: center;
+}
+
+.knowledge-file-empty strong {
+  color: #5f6878;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.knowledge-file-empty p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.knowledge-detail-footer {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f1f2f7;
+  padding: 17px 30px;
+}
+
+.knowledge-detail-footer span {
+  color: #aeb5c3;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.knowledge-detail-footer button {
+  min-width: 86px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 16px;
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.knowledge-detail-footer button:hover {
+  background: #e9edf4;
+}
+
+.knowledge-create-scrim {
+  z-index: 90;
+}
+
+.knowledge-create-dialog {
+  width: min(576px, calc(100vw - 32px));
+  border-radius: 18px;
+}
+
+.knowledge-create-form {
+  display: grid;
+  padding: 31px 30px 28px;
+}
+
+.knowledge-create-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 27px;
+}
+
+.knowledge-create-header h2 {
+  margin: 0;
+  color: #262b3a;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 28px;
+}
+
+.knowledge-create-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+}
+
+.knowledge-create-close:hover {
+  background: #f8f9fc;
+}
+
+.knowledge-create-field {
+  display: grid;
+  gap: 10px;
+}
+
+.knowledge-create-field span {
+  color: #586175;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 24px;
+}
+
+.knowledge-create-field b {
+  color: #ef4444;
+}
+
+.knowledge-create-field input {
+  width: 100%;
+  height: 52px;
+  border: 0;
+  border-radius: 16px;
+  outline: none;
+  background: #f7f7fc;
+  color: #262b3a;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 0 20px;
+}
+
+.knowledge-create-field input::placeholder {
+  color: #b5bdca;
+}
+
+.knowledge-create-field input:focus {
+  box-shadow: 0 0 0 3px rgba(142, 146, 255, 0.18);
+}
+
+.knowledge-create-counter {
+  justify-self: end;
+  margin-top: 8px;
+  color: #aeb5c1;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 22px;
+}
+
+.knowledge-create-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 29px;
+}
+
+.knowledge-create-cancel,
+.knowledge-create-submit {
+  display: inline-flex;
+  min-height: 45px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.knowledge-create-cancel {
+  min-width: 76px;
+  background: #f4f5f9;
+  color: #565f70;
+}
+
+.knowledge-create-cancel:hover {
+  background: #eaedf4;
+}
+
+.knowledge-create-submit {
+  min-width: 166px;
+  gap: 8px;
+  background: #8f92ff;
+  color: #ffffff;
+  padding: 0 22px;
+}
+
+.knowledge-create-submit:disabled {
+  cursor: not-allowed;
+  background: #b9baff;
+  opacity: 0.72;
+}
+
+.knowledge-create-submit svg {
+  width: 16px;
+  height: 16px;
+}
+
 .qr-dialog-body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 72px;
+  gap: 64px;
 }
 
 .qr-item {
   display: grid;
-  gap: 28px;
+  gap: 22px;
   justify-items: center;
   margin: 0;
 }
@@ -6887,79 +8559,15 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-.qr-art {
-  position: relative;
+.qr-image {
   display: block;
-  width: 146px;
-  height: 146px;
-  overflow: hidden;
-  background:
-    linear-gradient(#000 0 0) 10px 10px / 28px 8px no-repeat,
-    linear-gradient(#000 0 0) 10px 10px / 8px 28px no-repeat,
-    linear-gradient(#000 0 0) 108px 10px / 28px 8px no-repeat,
-    linear-gradient(#000 0 0) 128px 10px / 8px 28px no-repeat,
-    linear-gradient(#000 0 0) 10px 108px / 28px 8px no-repeat,
-    linear-gradient(#000 0 0) 10px 128px / 28px 8px no-repeat,
-    repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 10px),
-    repeating-linear-gradient(0deg, transparent 0 7px, #000 7px 10px, transparent 10px 15px),
-    #ffffff;
-  background-blend-mode: normal, normal, normal, normal, normal, normal, multiply, normal;
-  image-rendering: pixelated;
-}
-
-.qr-art::before,
-.qr-art::after {
-  position: absolute;
-  width: 30px;
-  height: 30px;
-  border: 8px solid #000;
+  width: 178px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   background: #ffffff;
-  content: '';
-}
-
-.qr-art::before {
-  top: 9px;
-  left: 9px;
-  box-shadow: 89px 0 0 -8px #fff, 89px 0 0 0 #000, 0 89px 0 -8px #fff, 0 89px 0 0 #000;
-}
-
-.qr-art::after {
-  right: 18px;
-  bottom: 18px;
-  width: 16px;
-  height: 16px;
-  border-width: 5px;
-}
-
-.qr-art-two {
-  background:
-    linear-gradient(#000 0 0) 12px 12px / 30px 8px no-repeat,
-    linear-gradient(#000 0 0) 12px 12px / 8px 30px no-repeat,
-    linear-gradient(#000 0 0) 106px 12px / 28px 8px no-repeat,
-    linear-gradient(#000 0 0) 126px 12px / 8px 30px no-repeat,
-    linear-gradient(#000 0 0) 12px 106px / 30px 8px no-repeat,
-    linear-gradient(#000 0 0) 12px 126px / 30px 8px no-repeat,
-    repeating-linear-gradient(90deg, transparent 0 4px, #000 4px 9px, transparent 9px 14px),
-    repeating-linear-gradient(0deg, #000 0 4px, transparent 4px 10px, #000 10px 12px, transparent 12px 17px),
-    #ffffff;
-}
-
-.qr-art i {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 2;
-  display: grid;
-  width: 34px;
-  height: 24px;
-  place-items: center;
-  border-radius: 3px;
-  background: #ffffff;
-  color: #111827;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 900;
-  transform: translate(-50%, -50%);
+  object-fit: contain;
 }
 
 .cover-guide-dialog {
@@ -7018,8 +8626,8 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1120px) {
   .suite-sidebar {
-    width: 116px;
-    flex-basis: 116px;
+    width: clamp(86px, 8vw, 116px);
+    flex-basis: clamp(86px, 8vw, 116px);
   }
 
   .nav-item > span:not(.nav-icon) {
@@ -7087,6 +8695,869 @@ onBeforeUnmount(() => {
 
   .login-hero {
     grid-template-columns: 1fr;
+  }
+
+  .qr-dialog {
+    width: min(420px, calc(100vw - 32px));
+    min-height: auto;
+    padding: 68px 24px 34px;
+  }
+
+  .qr-dialog-body {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .qr-image {
+    width: min(178px, 58vw);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1120px) {
+  .suite-header {
+    height: 64px;
+    flex-basis: 64px;
+    padding: 0 20px;
+  }
+
+  .suite-content {
+    padding: 18px;
+  }
+
+  .suite-content.page-seo,
+  .suite-content.page-copywriting,
+  .suite-content.page-publish {
+    padding: 0;
+  }
+
+  .reference-split-page.seo-page,
+  .reference-split-page.reference-copy-page {
+    height: 100%;
+    grid-template-columns: minmax(300px, 34vw) minmax(0, 1fr);
+  }
+
+  .panel-title,
+  .workspace-header,
+  .copy-workspace-header {
+    min-height: 74px;
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .reference-fields,
+  .copy-reference-fields,
+  .workspace-scroll,
+  .copy-results-scroll {
+    padding: 20px;
+  }
+
+  .panel-action-bar {
+    padding: 14px 20px 18px;
+  }
+
+  .seo-result-card {
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .seo-result-card h3,
+  .result-tags,
+  .suite-table {
+    margin-right: 0;
+    margin-left: 0;
+  }
+
+  .suite-table {
+    width: 100%;
+  }
+
+  .reference-copy-page .copy-empty-state,
+  .reference-copy-page .copy-generation-loading {
+    min-height: 360px;
+  }
+
+  .reference-copy-page .copy-output {
+    padding: 28px;
+  }
+
+  .reference-publish-page.publish-page {
+    width: 100%;
+    height: 100%;
+    grid-template-columns: 156px minmax(0, 1fr);
+  }
+
+  .publish-subnav {
+    padding: 16px 0;
+  }
+
+  .publish-subnav button {
+    min-height: 58px;
+    gap: 10px;
+    padding: 0 14px;
+    font-size: 15px;
+  }
+
+  .publish-workbench,
+  .reference-publish-page.mode-article .publish-workbench {
+    gap: 18px;
+    padding: 20px;
+  }
+
+  .publish-article-workbench,
+  .reference-publish-page.mode-article .publish-workbench {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 32vw);
+  }
+
+  .publish-image-workbench {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 34vw);
+  }
+
+  .reference-publish-page.mode-article .publish-article-panel {
+    width: auto;
+    height: 100%;
+  }
+
+  .image-edit-card,
+  .image-caption-card,
+  .image-side-settings,
+  .reference-publish-settings {
+    padding: 22px;
+  }
+
+  .article-publish-editor textarea {
+    padding: 24px;
+  }
+
+  .image-caption-card textarea {
+    min-height: 280px;
+  }
+
+  .publish-action {
+    min-height: 52px;
+    font-size: 18px;
+  }
+
+  .suite-content.page-accounts {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #f8f9ff;
+    padding: 0;
+  }
+
+  .accounts-page {
+    display: grid;
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    background: #f8f9ff;
+  }
+
+  .account-strip {
+    gap: 10px;
+    padding: 10px 20px;
+  }
+
+  .account-chip {
+    width: clamp(232px, 30vw, 270px);
+    min-width: 232px;
+    height: 68px;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-rows: 23px 18px;
+    column-gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .account-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .account-chip strong {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  .account-chip small {
+    font-size: 12px;
+  }
+
+  .account-actions {
+    gap: 8px;
+    padding: 14px 20px;
+  }
+
+  .account-actions button {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  .browser-toolbar {
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .browser-toolbar span {
+    flex: 1 1 calc(100% - 132px);
+  }
+
+  .browser-toolbar em,
+  .browser-toolbar small {
+    max-width: 160px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .suite-sidebar {
+    width: 136px;
+    flex-basis: 136px;
+  }
+
+  .nav-item,
+  .nav-item.active,
+  .help-center {
+    width: 108px;
+    height: 108px;
+    min-height: 108px;
+  }
+
+  .nav-icon,
+  .nav-item.active .nav-icon {
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+  }
+
+  .nav-icon::before {
+    inset: 8px;
+    border-radius: 18px;
+  }
+
+  .suite-header {
+    height: 82px;
+    flex-basis: 82px;
+    padding: 0 40px;
+  }
+
+  .suite-header h1 {
+    font-size: 24px;
+  }
+
+  .suite-content {
+    padding: 32px;
+  }
+
+  .suite-content.page-seo,
+  .suite-content.page-copywriting,
+  .suite-content.page-publish {
+    padding: 0;
+  }
+
+  .reference-split-page,
+  .reference-copy-page {
+    grid-template-columns: 420px minmax(0, 1fr);
+  }
+
+  .panel-title,
+  .workspace-header,
+  .copy-workspace-header {
+    min-height: 110px;
+    padding-right: 40px;
+    padding-left: 36px;
+  }
+
+  .reference-fields,
+  .copy-reference-fields {
+    padding: 32px 36px;
+  }
+
+  .workspace-scroll,
+  .copy-results-scroll {
+    padding: 32px 40px;
+  }
+
+  .panel-action-bar {
+    padding: 20px 36px 26px;
+  }
+
+  .reference-publish-page.publish-page {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .publish-workbench {
+    gap: 40px;
+    padding: 40px;
+  }
+
+  .publish-article-workbench {
+    grid-template-columns: minmax(0, 1fr) 480px;
+  }
+
+  .publish-image-workbench {
+    grid-template-columns: minmax(0, 1fr) 560px;
+  }
+
+  .reference-publish-page.mode-article .publish-workbench {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 32px;
+    padding: 28px 32px;
+  }
+
+  .reference-publish-page.mode-article .publish-article-panel {
+    width: 380px;
+  }
+}
+
+@media (max-height: 720px) {
+  .suite-header {
+    height: 60px;
+    flex-basis: 60px;
+  }
+
+  .suite-sidebar {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .suite-nav,
+  .nav-secondary {
+    gap: 2px;
+  }
+
+  .nav-secondary {
+    margin-top: 2px;
+  }
+
+  .nav-item,
+  .nav-item.active,
+  .help-center {
+    width: 84px;
+    height: 58px;
+    min-height: 58px;
+    gap: 1px;
+  }
+
+  .nav-icon,
+  .nav-item.active .nav-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+
+  .nav-icon::before {
+    inset: 2px;
+    border-radius: 10px;
+  }
+
+  .nav-icon-image,
+  .nav-item.active .nav-icon-image {
+    width: 20px;
+    height: 20px;
+  }
+
+  .help-center .nav-icon,
+  .help-center .nav-icon-image {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav-item > span:not(.nav-icon),
+  .help-center > span:not(.nav-icon) {
+    font-size: 12px;
+    line-height: 14px;
+  }
+
+  .help-center {
+    margin-top: 2px;
+  }
+
+  .panel-title,
+  .workspace-header,
+  .copy-workspace-header {
+    min-height: 66px;
+  }
+
+  .reference-fields,
+  .copy-reference-fields,
+  .workspace-scroll,
+  .copy-results-scroll {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .seo-result-card,
+  .reference-copy-page .copy-empty-state,
+  .reference-copy-page .copy-generation-loading {
+    min-height: 0;
+  }
+
+  .publish-workbench,
+  .reference-publish-page.mode-article .publish-workbench {
+    gap: 16px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .image-edit-card,
+  .image-caption-card,
+  .image-side-settings,
+  .reference-publish-settings {
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+
+  .article-publish-editor textarea,
+  .image-caption-card textarea {
+    line-height: 28px;
+  }
+
+  .accounts-page {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .account-strip {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .account-chip {
+    height: 62px;
+    grid-template-rows: 21px 16px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .account-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .account-chip strong {
+    font-size: 15px;
+    line-height: 19px;
+  }
+
+  .account-chip small {
+    font-size: 12px;
+    line-height: 15px;
+  }
+
+  .account-actions {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .account-actions button {
+    min-height: 34px;
+    font-size: 14px;
+  }
+
+  .login-browser-frame {
+    grid-template-rows: minmax(32px, auto) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .suite-shell {
+    display: grid;
+    height: 100vh;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .suite-sidebar {
+    display: flex;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--outline);
+    border-bottom-left-radius: 0;
+    padding: 8px 10px;
+  }
+
+  .suite-nav,
+  .nav-secondary {
+    display: flex;
+    width: auto;
+    flex: 0 0 auto;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav-item,
+  .nav-item.active,
+  .help-center {
+    width: 72px;
+    height: 66px;
+    min-height: 66px;
+    flex: 0 0 72px;
+    gap: 2px;
+  }
+
+  .nav-icon,
+  .nav-item.active .nav-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+  }
+
+  .nav-icon::before {
+    inset: 3px;
+    border-radius: 12px;
+  }
+
+  .nav-item > span:not(.nav-icon),
+  .help-center > span:not(.nav-icon) {
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .nav-icon-image,
+  .nav-item.active .nav-icon-image {
+    width: 22px;
+    height: 22px;
+  }
+
+  .help-center {
+    margin-top: 0;
+  }
+
+  .suite-main {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .suite-header {
+    padding: 10px 16px;
+  }
+
+  .suite-header h1,
+  .workspace-header h2 {
+    font-size: 18px;
+    line-height: 24px;
+  }
+
+  .suite-header p,
+  .workspace-header p {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .suite-content,
+  .suite-content.page-seo,
+  .suite-content.page-copywriting,
+  .suite-content.page-publish,
+  .suite-content.page-accounts {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .reference-split-page,
+  .reference-copy-page,
+  .reference-publish-page.publish-page,
+  .accounts-page {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .reference-split-page,
+  .reference-copy-page {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-config-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  .reference-form,
+  .reference-fields {
+    min-height: 0;
+  }
+
+  .reference-fields,
+  .copy-reference-fields,
+  .workspace-scroll,
+  .copy-results-scroll {
+    overflow: visible;
+    padding: 18px;
+  }
+
+  .panel-title,
+  .workspace-header,
+  .copy-workspace-header {
+    min-height: 68px;
+    padding: 12px 18px;
+  }
+
+  .panel-action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 14px 18px;
+  }
+
+  .reference-workspace {
+    min-height: 420px;
+  }
+
+  .seo-result-card {
+    width: 100%;
+    min-height: 0;
+    padding: 20px 18px;
+  }
+
+  .seo-result-card h3,
+  .result-tags,
+  .suite-table {
+    margin-right: 0;
+    margin-left: 0;
+  }
+
+  .suite-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .reference-copy-page .copy-empty-state,
+  .reference-copy-page .copy-generation-loading {
+    min-height: 280px;
+  }
+
+  .reference-copy-page .copy-output {
+    padding: 24px 20px;
+  }
+
+  .copy-output-head {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .reference-publish-page.publish-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .publish-subnav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px;
+  }
+
+  .publish-subnav button {
+    min-height: 44px;
+    flex: 1 0 118px;
+    justify-content: center;
+    border-right: 0;
+    border-bottom: 3px solid transparent;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  .publish-subnav button.active {
+    border-right-color: transparent;
+    border-bottom-color: var(--primary);
+  }
+
+  .publish-workbench,
+  .reference-publish-page.mode-article .publish-workbench,
+  .publish-article-workbench,
+  .publish-image-workbench {
+    height: auto;
+    grid-template-columns: 1fr;
+    overflow: visible;
+    padding: 18px;
+  }
+
+  .publish-panel,
+  .reference-publish-page.mode-article .publish-article-panel {
+    width: 100%;
+    height: auto;
+    grid-template-rows: auto;
+  }
+
+  .article-editor-card {
+    min-height: 380px;
+  }
+
+  .article-publish-editor textarea {
+    min-height: 260px;
+    padding: 22px 20px;
+    font-size: 16px;
+    line-height: 28px;
+  }
+
+  .article-inline-image {
+    width: calc(100% - 40px);
+    margin: 0 20px 20px;
+  }
+
+  .image-edit-card,
+  .image-caption-card,
+  .image-side-settings,
+  .reference-publish-settings {
+    padding: 20px;
+  }
+
+  .image-edit-card header {
+    margin-bottom: 18px;
+  }
+
+  .image-edit-card h2,
+  .image-caption-card h2 {
+    font-size: 20px;
+    line-height: 26px;
+  }
+
+  .image-caption-card textarea {
+    min-height: 240px;
+    font-size: 16px;
+    line-height: 28px;
+  }
+
+  .publish-action {
+    min-height: 50px;
+    font-size: 18px;
+  }
+
+  .accounts-page {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .account-strip {
+    gap: 10px;
+    padding: 10px 12px;
+    scroll-padding: 0 12px;
+  }
+
+  .account-chip {
+    width: min(72vw, 260px);
+    min-width: min(218px, calc(100vw - 24px));
+    height: 66px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-rows: 22px 17px;
+    column-gap: 11px;
+    padding: 9px 12px;
+  }
+
+  .account-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .account-avatar .xhs-avatar-badge {
+    width: 20px;
+    height: 20px;
+  }
+
+  .account-chip strong {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  .account-chip small {
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .account-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 12px 12px;
+  }
+
+  .account-actions button {
+    width: 100%;
+    min-height: 38px;
+    overflow: hidden;
+    padding: 0 10px;
+    font-size: 14px;
+    text-overflow: ellipsis;
+  }
+
+  .login-browser-frame {
+    min-height: clamp(420px, calc(100vh - 232px), 680px);
+    grid-template-rows: auto minmax(360px, 1fr);
+  }
+
+  .browser-toolbar {
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 6px;
+    overflow: visible;
+    padding: 6px 8px;
+  }
+
+  .browser-toolbar button {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    border-radius: 8px;
+    background: #f7f8fb;
+  }
+
+  .browser-toolbar span {
+    order: 2;
+    min-width: 0;
+    flex: 1 0 100%;
+    line-height: 24px;
+  }
+
+  .browser-toolbar em {
+    max-width: calc(50% - 8px);
+    flex: 1 1 auto;
+  }
+
+  .browser-toolbar small {
+    display: none;
+  }
+
+  .xiaohongshu-webview-wrap,
+  .xiaohongshu-webview-empty {
+    min-height: 360px;
+  }
+
+  .xiaohongshu-webview-empty {
+    padding: 24px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-chip {
+    width: calc(100vw - 24px);
+    min-width: calc(100vw - 24px);
+  }
+
+  .account-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .login-browser-frame {
+    min-height: calc(100vh - 220px);
+  }
+
+  .browser-toolbar em {
+    max-width: 100%;
+    flex-basis: calc(50% - 6px);
   }
 }
 </style>

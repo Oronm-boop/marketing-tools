@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="settings-overlay" @click.self="handleClose">
+    <div v-if="visible" class="settings-overlay">
       <div class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <!-- 标题栏 -->
         <div class="dialog-header">

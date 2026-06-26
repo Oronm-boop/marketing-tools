@@ -9,8 +9,13 @@ import { registerXiaohongshuPublisherIpc } from './xiaohongshuPublisher'
 
 const PREFERRED_WINDOW_WIDTH = 1984
 const PREFERRED_WINDOW_HEIGHT = 1274
-const MIN_WINDOW_WIDTH = 1024
-const MIN_WINDOW_HEIGHT = 640
+const MIN_WINDOW_WIDTH = 720
+const MIN_WINDOW_HEIGHT = 480
+const WINDOW_SCREEN_MARGIN = 24
+const ZOOM_BASE_WIDTH = 1024
+const ZOOM_BASE_HEIGHT = 720
+const MIN_ZOOM_FACTOR = 0.55
+const MAX_ZOOM_FACTOR = 1
 
 let mainWindow: BrowserWindow | null = null
 
@@ -30,13 +35,16 @@ function createWindow(): BrowserWindow {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webviewTag: true
+      webviewTag: true,
+      enablePreferredSizeMode: true
     }
   })
 
   mainWindow = window
+  installWindowZoomBehavior(window)
 
   window.on('ready-to-show', () => {
+    applyWindowZoom(window)
     window.show()
   })
 
@@ -64,11 +72,69 @@ function createWindow(): BrowserWindow {
 
 function getInitialWindowSize(): { width: number; height: number } {
   const { width: workAreaWidth, height: workAreaHeight } = screen.getPrimaryDisplay().workAreaSize
+  const availableWidth = Math.max(1, workAreaWidth - WINDOW_SCREEN_MARGIN)
+  const availableHeight = Math.max(1, workAreaHeight - WINDOW_SCREEN_MARGIN)
 
   return {
-    width: Math.min(PREFERRED_WINDOW_WIDTH, workAreaWidth),
-    height: Math.min(PREFERRED_WINDOW_HEIGHT, workAreaHeight)
+    width: Math.min(PREFERRED_WINDOW_WIDTH, availableWidth),
+    height: Math.min(PREFERRED_WINDOW_HEIGHT, availableHeight)
   }
+}
+
+function installWindowZoomBehavior(window: BrowserWindow): void {
+  let zoomTimer: ReturnType<typeof setTimeout> | null = null
+
+  const scheduleZoomUpdate = (): void => {
+    if (zoomTimer) {
+      clearTimeout(zoomTimer)
+    }
+    zoomTimer = setTimeout(() => {
+      zoomTimer = null
+      applyWindowZoom(window)
+    }, 80)
+  }
+
+  const handleDisplayChange = (): void => {
+    scheduleZoomUpdate()
+  }
+
+  window.webContents.on('did-finish-load', () => applyWindowZoom(window))
+  window.on('resize', scheduleZoomUpdate)
+  window.on('maximize', scheduleZoomUpdate)
+  window.on('unmaximize', scheduleZoomUpdate)
+  window.on('restore', scheduleZoomUpdate)
+  window.on('enter-full-screen', scheduleZoomUpdate)
+  window.on('leave-full-screen', scheduleZoomUpdate)
+
+  screen.on('display-added', handleDisplayChange)
+  screen.on('display-removed', handleDisplayChange)
+  screen.on('display-metrics-changed', handleDisplayChange)
+
+  window.on('closed', () => {
+    if (zoomTimer) {
+      clearTimeout(zoomTimer)
+      zoomTimer = null
+    }
+    screen.off('display-added', handleDisplayChange)
+    screen.off('display-removed', handleDisplayChange)
+    screen.off('display-metrics-changed', handleDisplayChange)
+  })
+}
+
+function applyWindowZoom(window: BrowserWindow): void {
+  if (window.isDestroyed()) return
+
+  const { width, height } = window.getContentBounds()
+  const zoomFactor = getWindowZoomFactor(width, height)
+  window.webContents.setZoomFactor(zoomFactor)
+}
+
+function getWindowZoomFactor(width: number, height: number): number {
+  const widthZoomFactor = width / ZOOM_BASE_WIDTH
+  const heightZoomFactor = height / ZOOM_BASE_HEIGHT
+  const zoomFactor = Math.min(widthZoomFactor, heightZoomFactor, MAX_ZOOM_FACTOR)
+
+  return Math.max(MIN_ZOOM_FACTOR, Number(zoomFactor.toFixed(2)))
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()

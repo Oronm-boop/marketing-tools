@@ -4,6 +4,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from .config import Settings
 from .json_utils import JSONExtractionError, extract_json_payload
+from .knowledge_base import KnowledgeBaseClient, KnowledgeBaseServiceError
 from .local_model_client import LocalModelClient, LocalModelClientError, build_chat_messages
 from .prompts import (
     SYSTEM_PROMPT,
@@ -16,6 +17,7 @@ from .schemas import (
     CopywritingItem,
     CopywritingRequest,
     CopywritingResponse,
+    KnowledgeBaseReference,
     PublishImagePromptItem,
     PublishImagePromptRequest,
     PublishImagePromptResponse,
@@ -50,6 +52,7 @@ class GenerationService:
         else:
             self.client = LocalModelClient(settings)
         self.search_client = TavilySearchClient(settings)
+        self.knowledge_base_client = KnowledgeBaseClient(settings)
 
     @property
     def model_name(self) -> str:
@@ -61,9 +64,11 @@ class GenerationService:
         return self.settings.local_model_name
 
     async def generate_seo_keywords(self, payload: SeoKeywordRequest) -> SeoKeywordResponse:
-        web_context = await self._search_web_context(build_seo_search_query(payload))
+        query = build_seo_search_query(payload)
+        web_context = await self._search_web_context(query)
+        knowledge_context = await self._retrieve_knowledge_context(payload.knowledge_base, query)
         content = await self._call_model(
-            build_seo_user_prompt(payload, web_context),
+            build_seo_user_prompt(payload, web_context, knowledge_context),
             temperature=0.6,
             max_tokens=2048,
         )
@@ -79,9 +84,11 @@ class GenerationService:
     async def generate_copywriting(self, payload: CopywritingRequest) -> CopywritingResponse:
         target_count = max(payload.article_count, len(payload.platform_styles))
         allowed_platforms = set(payload.platform_styles)
-        web_context = await self._search_web_context(build_copywriting_search_query(payload))
+        query = build_copywriting_search_query(payload)
+        web_context = await self._search_web_context(query)
+        knowledge_context = await self._retrieve_knowledge_context(payload.knowledge_base, query)
         content = await self._call_model(
-            build_copywriting_user_prompt(payload, web_context),
+            build_copywriting_user_prompt(payload, web_context, knowledge_context),
             temperature=0.5,
             max_tokens=min(12000, max(2048, 2048 + target_count * 1600)),
         )
@@ -138,6 +145,18 @@ class GenerationService:
         except WebSearchError as exc:
             raise GenerationServiceError(str(exc)) from exc
         return format_web_context(query, results)
+
+    async def _retrieve_knowledge_context(
+        self,
+        knowledge_base: KnowledgeBaseReference | None,
+        query: str,
+    ) -> str:
+        if knowledge_base is None:
+            return ""
+        try:
+            return await self.knowledge_base_client.retrieve_context(knowledge_base, query)
+        except KnowledgeBaseServiceError as exc:
+            raise GenerationServiceError(str(exc)) from exc
 
     async def _call_model(
         self,

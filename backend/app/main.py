@@ -1,10 +1,11 @@
 from urllib.parse import urlencode
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings, get_settings, reload_settings, update_env_file
 from .image_generation import ComfyUIImageGenerationService, ImageGenerationServiceError
+from .knowledge_base import KnowledgeBaseClient, KnowledgeBaseServiceError
 from .schemas import (
     CopywritingRequest,
     CopywritingResponse,
@@ -12,6 +13,9 @@ from .schemas import (
     ImageGenerationRequest,
     ImageGenerationStatusResponse,
     ImageGenerationTaskResponse,
+    KnowledgeBase,
+    KnowledgeBaseCreateRequest,
+    KnowledgeBaseDocumentsResponse,
     ModelSettingsRead,
     ModelSettingsWrite,
     ProviderErrorResponse,
@@ -143,6 +147,96 @@ def create_app() -> FastAPI:
         except GenerationServiceError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    @app.get(
+        "/api/knowledge-bases",
+        response_model=list[KnowledgeBase],
+        responses={502: {"model": ProviderErrorResponse}},
+    )
+    async def list_knowledge_bases(
+        service: KnowledgeBaseClient = Depends(get_knowledge_base_service),
+    ) -> list[KnowledgeBase]:
+        try:
+            return await service.list_knowledge_bases()
+        except KnowledgeBaseServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post(
+        "/api/knowledge-bases",
+        response_model=KnowledgeBase,
+        responses={502: {"model": ProviderErrorResponse}},
+    )
+    async def create_knowledge_base(
+        payload: KnowledgeBaseCreateRequest,
+        service: KnowledgeBaseClient = Depends(get_knowledge_base_service),
+    ) -> KnowledgeBase:
+        try:
+            return await service.create_knowledge_base(payload.name)
+        except KnowledgeBaseServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.delete(
+        "/api/knowledge-bases/{collection_name}",
+        responses={502: {"model": ProviderErrorResponse}},
+    )
+    async def delete_knowledge_base(
+        collection_name: str,
+        service: KnowledgeBaseClient = Depends(get_knowledge_base_service),
+    ) -> dict[str, bool]:
+        try:
+            await service.delete_knowledge_base(collection_name)
+        except KnowledgeBaseServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True}
+
+    @app.get(
+        "/api/knowledge-bases/{collection_name}/documents",
+        response_model=KnowledgeBaseDocumentsResponse,
+        responses={502: {"model": ProviderErrorResponse}},
+    )
+    async def list_knowledge_base_documents(
+        collection_name: str,
+        service: KnowledgeBaseClient = Depends(get_knowledge_base_service),
+    ) -> KnowledgeBaseDocumentsResponse:
+        try:
+            documents = await service.list_documents(collection_name)
+        except KnowledgeBaseServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return KnowledgeBaseDocumentsResponse(documents=documents)
+
+    @app.post(
+        "/api/knowledge-bases/{collection_name}/documents",
+        response_model=KnowledgeBaseDocumentsResponse,
+        responses={502: {"model": ProviderErrorResponse}},
+    )
+    async def upload_knowledge_base_documents(
+        collection_name: str,
+        files: list[UploadFile] = File(...),
+        service: KnowledgeBaseClient = Depends(get_knowledge_base_service),
+    ) -> KnowledgeBaseDocumentsResponse:
+        if not files:
+            raise HTTPException(status_code=400, detail="请至少选择一个文件")
+        try:
+            documents = await service.upload_documents(collection_name, files)
+        except KnowledgeBaseServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return KnowledgeBaseDocumentsResponse(documents=documents)
+
+    @app.delete(
+        "/api/knowledge-bases/{collection_name}/documents/{file_id}",
+        response_model=KnowledgeBaseDocumentsResponse,
+        responses={502: {"model": ProviderErrorResponse}},
+    )
+    async def delete_knowledge_base_document(
+        collection_name: str,
+        file_id: str,
+        service: KnowledgeBaseClient = Depends(get_knowledge_base_service),
+    ) -> KnowledgeBaseDocumentsResponse:
+        try:
+            documents = await service.delete_document(collection_name, file_id)
+        except KnowledgeBaseServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return KnowledgeBaseDocumentsResponse(documents=documents)
+
     @app.post(
         "/api/image-generation/prompts",
         response_model=PublishImagePromptResponse,
@@ -236,6 +330,10 @@ def get_image_generation_service(
     settings: Settings = Depends(get_settings),
 ) -> ComfyUIImageGenerationService:
     return ComfyUIImageGenerationService(settings)
+
+
+def get_knowledge_base_service(settings: Settings = Depends(get_settings)) -> KnowledgeBaseClient:
+    return KnowledgeBaseClient(settings)
 
 
 def build_generated_image_url(request: Request, image: GeneratedImageFile) -> str:

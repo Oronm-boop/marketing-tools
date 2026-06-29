@@ -14,6 +14,16 @@ NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_len
 CopyLength = Literal["短", "中", "长"]
 
 
+class KnowledgeBaseReference(BaseModel):
+    id: NonEmptyString
+    name: str = ""
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+
 class SeoKeywordRequest(BaseModel):
     business_description: NonEmptyString = Field(
         validation_alias=AliasChoices("business_description", "business", "业务描述")
@@ -30,6 +40,10 @@ class SeoKeywordRequest(BaseModel):
     search_engines: list[str] = Field(
         default_factory=lambda: ["百度", "360搜索", "必应"],
         validation_alias=AliasChoices("search_engines", "searchEngines", "搜索引擎"),
+    )
+    knowledge_base: KnowledgeBaseReference | None = Field(
+        default=None,
+        validation_alias=AliasChoices("knowledge_base", "knowledgeBase"),
     )
 
     model_config = ConfigDict(populate_by_name=True)
@@ -92,6 +106,10 @@ class CopywritingRequest(BaseModel):
     copy_length: CopyLength = Field(
         default="中",
         validation_alias=AliasChoices("copy_length", "copyLength", "length", "文案长度"),
+    )
+    knowledge_base: KnowledgeBaseReference | None = Field(
+        default=None,
+        validation_alias=AliasChoices("knowledge_base", "knowledgeBase"),
     )
 
     model_config = ConfigDict(populate_by_name=True)
@@ -191,6 +209,33 @@ class ImageGenerationStatusResponse(BaseModel):
     status: Literal["pending", "running", "success", "failed"]
     message: str = ""
     image: GeneratedImageFile | None = None
+
+
+class KnowledgeBaseDocument(BaseModel):
+    id: NonEmptyString
+    name: NonEmptyString
+    size: int = Field(default=0, ge=0)
+    uploadedAt: int = Field(default=0, ge=0)
+
+
+class KnowledgeBase(BaseModel):
+    id: NonEmptyString
+    name: NonEmptyString
+    documentCount: int = Field(default=0, ge=0)
+    updatedAt: str = ""
+    documents: list[KnowledgeBaseDocument] = Field(default_factory=list)
+
+
+class KnowledgeBaseCreateRequest(BaseModel):
+    name: NonEmptyString = Field(
+        validation_alias=AliasChoices("name", "collection_name", "collectionName")
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class KnowledgeBaseDocumentsResponse(BaseModel):
+    documents: list[KnowledgeBaseDocument]
 
 
 class ProviderErrorResponse(BaseModel):

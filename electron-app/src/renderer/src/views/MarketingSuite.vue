@@ -1147,10 +1147,10 @@
         <header class="knowledge-manager-header">
           <div>
             <h2>管理知识库</h2>
-            <p>{{ knowledgeBases.length }}个知识库</p>
+            <p>{{ knowledgeBaseLoading ? '正在同步知识库' : `${knowledgeBases.length}个知识库` }}</p>
           </div>
           <div class="knowledge-manager-actions">
-            <button class="knowledge-add-button" type="button" @click="openKnowledgeBaseCreateDialog">
+            <button class="knowledge-add-button" type="button" :disabled="knowledgeBaseLoading" @click="openKnowledgeBaseCreateDialog">
               <IconGlyph name="plus" />
               <span>新增</span>
             </button>
@@ -1161,6 +1161,14 @@
         </header>
 
         <div class="knowledge-manager-list">
+          <div v-if="knowledgeBaseError" class="knowledge-manager-empty">
+            <img class="knowledge-manager-icon" :src="knowledgeBaseDialogIconUrl" alt="" aria-hidden="true" />
+            <strong>{{ knowledgeBaseError }}</strong>
+          </div>
+          <div v-else-if="knowledgeBaseLoading && !knowledgeBases.length" class="knowledge-manager-empty">
+            <img class="knowledge-manager-icon" :src="knowledgeBaseDialogIconUrl" alt="" aria-hidden="true" />
+            <strong>正在加载知识库</strong>
+          </div>
           <div
             v-for="knowledgeBase in knowledgeBases"
             :key="knowledgeBase.id"
@@ -1171,19 +1179,21 @@
             <img class="knowledge-manager-icon" :src="knowledgeBaseDialogIconUrl" alt="" aria-hidden="true" />
             <div class="knowledge-manager-meta">
               <strong>{{ knowledgeBase.name }}</strong>
-              <span>{{ knowledgeBase.documentCount }} 篇文档 · 更新于 {{ knowledgeBase.updatedAt }}</span>
+              <span>{{ knowledgeBase.documentCount }} 篇文档 · 更新于 {{ knowledgeBase.updatedAt || '未知' }}</span>
             </div>
             <button
               class="knowledge-delete-button"
               type="button"
+              :disabled="knowledgeBaseLoading"
               :aria-label="`删除${knowledgeBase.name}`"
-              @click.stop="deleteKnowledgeBase(knowledgeBase.id)"
+              :title="knowledgeBaseLoading ? '正在同步知识库' : '删除知识库'"
+              @click.stop="openKnowledgeBaseDeleteConfirm(knowledgeBase)"
             >
               <IconGlyph name="trash" />
             </button>
           </div>
 
-          <div v-if="!knowledgeBases.length" class="knowledge-manager-empty">
+          <div v-if="!knowledgeBaseLoading && !knowledgeBaseError && !knowledgeBases.length" class="knowledge-manager-empty">
             <img class="knowledge-manager-icon" :src="knowledgeBaseDialogIconUrl" alt="" aria-hidden="true" />
             <strong>暂无知识库</strong>
           </div>
@@ -1218,16 +1228,17 @@
           class="knowledge-upload-dropzone"
           :class="{ active: knowledgeUploadDragActive }"
           type="button"
+          :disabled="knowledgeBaseFileBusy"
           @click="chooseKnowledgeBaseFiles"
-          @dragenter.prevent="knowledgeUploadDragActive = true"
-          @dragover.prevent="knowledgeUploadDragActive = true"
+          @dragenter.prevent="!knowledgeBaseFileBusy && (knowledgeUploadDragActive = true)"
+          @dragover.prevent="!knowledgeBaseFileBusy && (knowledgeUploadDragActive = true)"
           @dragleave.prevent="knowledgeUploadDragActive = false"
           @drop.prevent="handleKnowledgeBaseFileDrop"
         >
           <span class="knowledge-upload-icon">
             <IconGlyph name="upload" />
           </span>
-          <strong>点击或拖拽上传文件</strong>
+          <strong>{{ getKnowledgeUploadTitle() }}</strong>
           <em>支持 PDF、Word、Markdown、Excel、图片等格式</em>
         </button>
         <input
@@ -1238,6 +1249,10 @@
           :accept="`${KNOWLEDGE_BASE_FILE_ACCEPT},image/*`"
           @change="handleKnowledgeBaseFileInput"
         />
+
+        <div v-if="knowledgeBaseError" class="knowledge-file-empty">
+          <strong>{{ knowledgeBaseError }}</strong>
+        </div>
 
         <div class="knowledge-file-list">
           <div
@@ -1251,22 +1266,21 @@
             </span>
             <div class="knowledge-file-meta">
               <strong>{{ document.name }}</strong>
-              <span>{{ formatKnowledgeFileSize(document.size) }} · {{ formatDateOnly(document.uploadedAt) }}</span>
+              <span>{{ formatKnowledgeFileSize(document.size) }} · {{ formatKnowledgeFileDate(document.uploadedAt) }}</span>
             </div>
             <button
               class="knowledge-file-delete"
               type="button"
+              :disabled="knowledgeBaseUploading || isKnowledgeBaseDocumentDeleting(document.id)"
               :aria-label="`删除${document.name}`"
-              @click.stop="deleteKnowledgeBaseDocument(document.id)"
+              :title="isKnowledgeBaseDocumentDeleting(document.id) ? '正在删除' : '删除文件'"
+              @click.stop="openKnowledgeBaseDocumentDeleteConfirm(document)"
             >
               <IconGlyph name="trash" />
             </button>
           </div>
 
           <div v-if="!activeKnowledgeBaseDocuments.length" class="knowledge-file-empty">
-            <span class="knowledge-upload-icon">
-              <IconGlyph name="upload" />
-            </span>
             <strong>暂无文件</strong>
             <p>上传后的文件会显示在这里</p>
           </div>
@@ -1274,7 +1288,83 @@
 
         <footer class="knowledge-detail-footer">
           <span>共 {{ activeKnowledgeBaseFileCount }} 个文件</span>
-          <button type="button" @click="finishKnowledgeBaseDetail">完成</button>
+          <button type="button" :disabled="knowledgeBaseFileBusy" @click="finishKnowledgeBaseDetail">完成</button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      v-if="knowledgeBaseDeleteConfirmOpen && pendingKnowledgeBaseDelete"
+      class="modal-scrim knowledge-delete-scrim"
+      @click.self="closeKnowledgeBaseDeleteConfirm"
+    >
+      <section class="knowledge-delete-dialog" role="dialog" aria-modal="true" aria-label="删除知识库">
+        <header class="knowledge-delete-header">
+          <div>
+            <h2>删除知识库</h2>
+            <p>会同步删除其中的文件、向量和本地解析数据</p>
+          </div>
+          <button
+            class="modal-close knowledge-delete-close"
+            type="button"
+            aria-label="关闭删除确认"
+            @click="closeKnowledgeBaseDeleteConfirm"
+          >
+            <img class="knowledge-close-icon" :src="closeIconUrl" alt="" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div class="knowledge-delete-target">
+          <span class="knowledge-delete-icon">
+            <IconGlyph name="trash" />
+          </span>
+          <strong>{{ pendingKnowledgeBaseDelete.name }}</strong>
+        </div>
+
+        <footer class="knowledge-delete-footer">
+          <button class="knowledge-create-cancel" type="button" @click="closeKnowledgeBaseDeleteConfirm">取消</button>
+          <button class="knowledge-delete-submit" type="button" @click="confirmKnowledgeBaseDelete">
+            <IconGlyph name="trash" />
+            <span>确认删除</span>
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      v-if="knowledgeFileDeleteConfirmOpen && pendingKnowledgeFileDelete"
+      class="modal-scrim knowledge-delete-scrim"
+      @click.self="closeKnowledgeBaseDocumentDeleteConfirm"
+    >
+      <section class="knowledge-delete-dialog" role="dialog" aria-modal="true" aria-label="删除知识库文件">
+        <header class="knowledge-delete-header">
+          <div>
+            <h2>删除文件</h2>
+            <p>会同步移除知识库中的向量和本地解析文件</p>
+          </div>
+          <button
+            class="modal-close knowledge-delete-close"
+            type="button"
+            aria-label="关闭删除确认"
+            @click="closeKnowledgeBaseDocumentDeleteConfirm"
+          >
+            <img class="knowledge-close-icon" :src="closeIconUrl" alt="" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div class="knowledge-delete-target">
+          <span class="knowledge-delete-icon">
+            <IconGlyph name="document" />
+          </span>
+          <strong>{{ pendingKnowledgeFileDelete.name }}</strong>
+        </div>
+
+        <footer class="knowledge-delete-footer">
+          <button class="knowledge-create-cancel" type="button" @click="closeKnowledgeBaseDocumentDeleteConfirm">取消</button>
+          <button class="knowledge-delete-submit" type="button" @click="confirmKnowledgeBaseDocumentDelete">
+            <IconGlyph name="trash" />
+            <span>确认删除</span>
+          </button>
         </footer>
       </section>
     </div>
@@ -1297,7 +1387,7 @@
 
           <footer class="knowledge-create-footer">
             <button class="knowledge-create-cancel" type="button" @click="closeKnowledgeBaseCreateDialog">取消</button>
-            <button class="knowledge-create-submit" :disabled="!canCreateKnowledgeBase" type="submit">
+            <button class="knowledge-create-submit" :disabled="!canCreateKnowledgeBase || knowledgeBaseLoading" type="submit">
               <IconGlyph name="plus" />
               <span>创建知识库</span>
             </button>
@@ -1340,6 +1430,17 @@ import {
   type PublishImagePromptItem,
   type SeoKeywordItem
 } from '@api/generation'
+import {
+  createKnowledgeBase as createRemoteKnowledgeBase,
+  deleteKnowledgeBase as deleteRemoteKnowledgeBase,
+  deleteKnowledgeBaseDocument as deleteRemoteKnowledgeBaseDocument,
+  listKnowledgeBaseDocuments,
+  listKnowledgeBases,
+  uploadKnowledgeBaseDocuments,
+  type KnowledgeBase,
+  type KnowledgeBaseDocument,
+  type KnowledgeBaseReference
+} from '@api/knowledge'
 
 type PageKey = 'trends' | 'seo' | 'copywriting' | 'publish' | 'accounts' | 'history'
 type PrimaryNavPage = 'trends' | 'seo' | 'copywriting' | 'publish'
@@ -1427,24 +1528,6 @@ type HistoryType = GenerationEntry['type']
 type PublishMode = 'article' | 'image'
 type CopyDropdownKey = 'articleCount' | 'copyLength'
 type KnowledgeBaseDropdownKey = 'seo' | 'copy'
-
-type KnowledgeBaseReference = {
-  id: string
-  name: string
-}
-
-type KnowledgeBase = KnowledgeBaseReference & {
-  documentCount: number
-  updatedAt: string
-  documents: KnowledgeBaseDocument[]
-}
-
-type KnowledgeBaseDocument = {
-  id: string
-  name: string
-  size: number
-  uploadedAt: number
-}
 
 type ChatSession = {
   id: string
@@ -1545,7 +1628,6 @@ type XiaohongshuWebviewElement = HTMLElement & {
 }
 
 const SESSION_STORAGE_KEY = 'mdt-ai-agent.sessions.v1'
-const KNOWLEDGE_BASE_STORAGE_KEY = 'mdt-ai-agent.knowledge-bases.v1'
 const KNOWLEDGE_BASE_NONE_ID = 'none'
 const KNOWLEDGE_BASE_NAME_MAX_LENGTH = 30
 const KNOWLEDGE_BASE_FILE_ACCEPT = '.pdf,.doc,.docx,.md,.markdown,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif'
@@ -1563,10 +1645,10 @@ const copyArticleCountOptions = [1, 3, 5, 8]
 const copyLengthOptions: CopyLength[] = ['短', '中', '长']
 const copyLength = ref<CopyLength>('中')
 const copyDropdownOpen = ref<CopyDropdownKey | ''>('')
-const knowledgeBases = ref<KnowledgeBase[]>(loadKnowledgeBases())
+const knowledgeBases = ref<KnowledgeBase[]>([])
 const selectedSeoKnowledgeBaseId = ref(KNOWLEDGE_BASE_NONE_ID)
 const selectedCopyKnowledgeBaseId = ref(KNOWLEDGE_BASE_NONE_ID)
-const selectedManagedKnowledgeBaseId = ref(knowledgeBases.value[0]?.id || '')
+const selectedManagedKnowledgeBaseId = ref('')
 const knowledgeBaseDropdownOpen = ref<KnowledgeBaseDropdownKey | ''>('')
 const knowledgeBaseManagerOpen = ref(false)
 const knowledgeBaseCreateDialogOpen = ref(false)
@@ -1576,6 +1658,14 @@ const selectedKnowledgeBaseDetailId = ref('')
 const knowledgeFileInputRef = ref<HTMLInputElement | null>(null)
 const knowledgeUploadDragActive = ref(false)
 const highlightedKnowledgeFileId = ref('')
+const knowledgeBaseLoading = ref(false)
+const knowledgeBaseUploading = ref(false)
+const knowledgeBaseError = ref('')
+const deletingKnowledgeFileIds = ref<Set<string>>(new Set())
+const knowledgeBaseDeleteConfirmOpen = ref(false)
+const pendingKnowledgeBaseDelete = ref<KnowledgeBase | null>(null)
+const knowledgeFileDeleteConfirmOpen = ref(false)
+const pendingKnowledgeFileDelete = ref<KnowledgeBaseDocument | null>(null)
 const sessions = ref<ChatSession[]>(loadSessions())
 const activeSessionId = ref(ensureInitialSessionId(sessions.value))
 const xiaohongshuWebviewRef = ref<XiaohongshuWebviewElement | null>(null)
@@ -1789,6 +1879,8 @@ const canCreateKnowledgeBase = computed(() => Boolean(knowledgeBaseDraftName.val
 const activeKnowledgeBase = computed(() => knowledgeBases.value.find((item) => item.id === selectedKnowledgeBaseDetailId.value) || null)
 const activeKnowledgeBaseDocuments = computed(() => activeKnowledgeBase.value?.documents || [])
 const activeKnowledgeBaseFileCount = computed(() => activeKnowledgeBaseDocuments.value.length)
+const knowledgeBaseDeleting = computed(() => deletingKnowledgeFileIds.value.size > 0)
+const knowledgeBaseFileBusy = computed(() => knowledgeBaseUploading.value || knowledgeBaseDeleting.value)
 const tagInput = ref('')
 const PUBLISH_IMAGE_SLOT_COUNT = 3
 const MIN_PUBLISH_IMAGE_COUNT = 1
@@ -1907,6 +1999,61 @@ function closeKnowledgeBaseDropdown() {
   knowledgeBaseDropdownOpen.value = ''
 }
 
+async function refreshKnowledgeBases(preferredId = selectedManagedKnowledgeBaseId.value) {
+  knowledgeBaseLoading.value = true
+  knowledgeBaseError.value = ''
+
+  try {
+    knowledgeBases.value = await listKnowledgeBases()
+    syncKnowledgeBaseSelection(preferredId)
+  } catch (error) {
+    knowledgeBaseError.value = getKnowledgeBaseErrorMessage(error)
+  } finally {
+    knowledgeBaseLoading.value = false
+  }
+}
+
+function syncKnowledgeBaseSelection(preferredId = selectedManagedKnowledgeBaseId.value) {
+  selectedSeoKnowledgeBaseId.value = resolveKnowledgeBaseId(selectedSeoKnowledgeBaseId.value)
+  selectedCopyKnowledgeBaseId.value = resolveKnowledgeBaseId(selectedCopyKnowledgeBaseId.value)
+
+  const resolvedPreferredId = resolveKnowledgeBaseId(preferredId)
+  selectedManagedKnowledgeBaseId.value =
+    resolvedPreferredId === KNOWLEDGE_BASE_NONE_ID ? knowledgeBases.value[0]?.id || '' : resolvedPreferredId
+
+  if (selectedKnowledgeBaseDetailId.value && !knowledgeBases.value.some((item) => item.id === selectedKnowledgeBaseDetailId.value)) {
+    closeKnowledgeBaseDetail()
+  }
+}
+
+function upsertKnowledgeBase(knowledgeBase: KnowledgeBase) {
+  const index = knowledgeBases.value.findIndex((item) => item.id === knowledgeBase.id)
+  if (index >= 0) {
+    knowledgeBases.value.splice(index, 1, knowledgeBase)
+  } else {
+    knowledgeBases.value.unshift(knowledgeBase)
+  }
+}
+
+function replaceKnowledgeBaseDocuments(knowledgeBaseId: string, documents: KnowledgeBaseDocument[]) {
+  const knowledgeBase = knowledgeBases.value.find((item) => item.id === knowledgeBaseId)
+  if (!knowledgeBase) return
+  knowledgeBase.documents = documents
+  syncKnowledgeBaseDocumentStats(knowledgeBase)
+}
+
+async function refreshKnowledgeBaseDocuments(knowledgeBaseId: string) {
+  try {
+    const response = await listKnowledgeBaseDocuments(knowledgeBaseId)
+    replaceKnowledgeBaseDocuments(knowledgeBaseId, response.documents)
+    highlightedKnowledgeFileId.value = response.documents[0]?.id || ''
+  } catch (error) {
+    if (!knowledgeBaseError.value) {
+      knowledgeBaseError.value = getKnowledgeBaseErrorMessage(error)
+    }
+  }
+}
+
 function handleKnowledgeBaseDropdownFocusout(event: FocusEvent) {
   const target = event.currentTarget
   const nextTarget = event.relatedTarget
@@ -1936,11 +2083,13 @@ function openKnowledgeBaseManager() {
   const resolvedId = resolveKnowledgeBaseId(preferredId)
   selectedManagedKnowledgeBaseId.value = resolvedId === KNOWLEDGE_BASE_NONE_ID ? knowledgeBases.value[0]?.id || '' : resolvedId
   knowledgeBaseManagerOpen.value = true
+  void refreshKnowledgeBases(selectedManagedKnowledgeBaseId.value)
 }
 
 function closeKnowledgeBaseManager() {
   knowledgeBaseManagerOpen.value = false
   closeKnowledgeBaseCreateDialog()
+  closeKnowledgeBaseDeleteConfirm()
   closeKnowledgeBaseDetail()
 }
 
@@ -1954,27 +2103,29 @@ function closeKnowledgeBaseCreateDialog() {
   knowledgeBaseDraftName.value = ''
 }
 
-function createKnowledgeBase() {
+async function createKnowledgeBase() {
   const name = knowledgeBaseDraftName.value.trim()
   if (!name) return
 
-  const knowledgeBase: KnowledgeBase = {
-    id: createId(),
-    name,
-    documentCount: 0,
-    updatedAt: formatDateOnly(Date.now()),
-    documents: []
+  knowledgeBaseLoading.value = true
+  knowledgeBaseError.value = ''
+  try {
+    const knowledgeBase = await createRemoteKnowledgeBase(name)
+    upsertKnowledgeBase(knowledgeBase)
+    selectedManagedKnowledgeBaseId.value = knowledgeBase.id
+    closeKnowledgeBaseCreateDialog()
+  } catch (error) {
+    knowledgeBaseError.value = getKnowledgeBaseErrorMessage(error)
+  } finally {
+    knowledgeBaseLoading.value = false
   }
-  knowledgeBases.value.push(knowledgeBase)
-  selectedManagedKnowledgeBaseId.value = knowledgeBase.id
-  closeKnowledgeBaseCreateDialog()
 }
 
 function openKnowledgeBaseDetail(knowledgeBaseId: string) {
   const knowledgeBase = knowledgeBases.value.find((item) => item.id === knowledgeBaseId)
   selectedManagedKnowledgeBaseId.value = knowledgeBaseId
   selectedKnowledgeBaseDetailId.value = knowledgeBaseId
-  highlightedKnowledgeFileId.value = knowledgeBase?.documents[1]?.id || ''
+  highlightedKnowledgeFileId.value = knowledgeBase?.documents[0]?.id || ''
   knowledgeBaseDetailOpen.value = true
 }
 
@@ -1983,6 +2134,7 @@ function closeKnowledgeBaseDetail() {
   selectedKnowledgeBaseDetailId.value = ''
   highlightedKnowledgeFileId.value = ''
   knowledgeUploadDragActive.value = false
+  closeKnowledgeBaseDocumentDeleteConfirm()
 }
 
 function backToKnowledgeBaseManager() {
@@ -1999,67 +2151,162 @@ function finishKnowledgeBaseDetail() {
 }
 
 function chooseKnowledgeBaseFiles() {
+  if (knowledgeBaseFileBusy.value) return
   knowledgeFileInputRef.value?.click()
 }
 
 function handleKnowledgeBaseFileInput(event: Event) {
   const input = event.target as HTMLInputElement
-  addKnowledgeBaseFiles(Array.from(input.files ?? []))
+  if (knowledgeBaseFileBusy.value) {
+    input.value = ''
+    return
+  }
+  void addKnowledgeBaseFiles(Array.from(input.files ?? []))
   input.value = ''
 }
 
 function handleKnowledgeBaseFileDrop(event: DragEvent) {
   knowledgeUploadDragActive.value = false
-  addKnowledgeBaseFiles(Array.from(event.dataTransfer?.files ?? []))
+  if (knowledgeBaseFileBusy.value) return
+  void addKnowledgeBaseFiles(Array.from(event.dataTransfer?.files ?? []))
 }
 
-function addKnowledgeBaseFiles(files: File[]) {
+function getKnowledgeUploadTitle() {
+  if (knowledgeBaseUploading.value) return '正在上传并处理文件'
+  if (knowledgeBaseDeleting.value) return '正在删除文件'
+  return '点击或拖拽上传文件'
+}
+
+function isKnowledgeBaseDocumentDeleting(documentId: string) {
+  return deletingKnowledgeFileIds.value.has(documentId)
+}
+
+function setKnowledgeBaseDocumentDeleting(documentId: string, deleting: boolean) {
+  const nextIds = new Set(deletingKnowledgeFileIds.value)
+  if (deleting) {
+    nextIds.add(documentId)
+  } else {
+    nextIds.delete(documentId)
+  }
+  deletingKnowledgeFileIds.value = nextIds
+}
+
+function openKnowledgeBaseDocumentDeleteConfirm(document: KnowledgeBaseDocument) {
+  if (knowledgeBaseFileBusy.value || isKnowledgeBaseDocumentDeleting(document.id)) return
+  pendingKnowledgeFileDelete.value = document
+  knowledgeFileDeleteConfirmOpen.value = true
+}
+
+function closeKnowledgeBaseDocumentDeleteConfirm() {
+  if (knowledgeBaseDeleting.value) return
+  knowledgeFileDeleteConfirmOpen.value = false
+  pendingKnowledgeFileDelete.value = null
+}
+
+function confirmKnowledgeBaseDocumentDelete() {
+  const document = pendingKnowledgeFileDelete.value
+  if (!document) return
+  knowledgeFileDeleteConfirmOpen.value = false
+  pendingKnowledgeFileDelete.value = null
+  void deleteKnowledgeBaseDocument(document)
+}
+
+async function addKnowledgeBaseFiles(files: File[]) {
   if (!files.length) return
   const knowledgeBase = activeKnowledgeBase.value
   if (!knowledgeBase) return
 
-  const documents = files.map((file) => ({
-    id: createId(),
-    name: file.name,
-    size: file.size,
-    uploadedAt: Date.now()
-  }))
-  knowledgeBase.documents.unshift(...documents)
-  syncKnowledgeBaseDocumentStats(knowledgeBase)
-  highlightedKnowledgeFileId.value = documents[0]?.id || ''
+  knowledgeBaseUploading.value = true
+  knowledgeBaseError.value = ''
+  try {
+    const response = await uploadKnowledgeBaseDocuments(knowledgeBase.id, files)
+    replaceKnowledgeBaseDocuments(knowledgeBase.id, response.documents)
+    highlightedKnowledgeFileId.value = response.documents[0]?.id || ''
+  } catch (error) {
+    knowledgeBaseError.value = getKnowledgeBaseErrorMessage(error)
+    await refreshKnowledgeBaseDocuments(knowledgeBase.id)
+  } finally {
+    knowledgeBaseUploading.value = false
+  }
 }
 
-function deleteKnowledgeBaseDocument(documentId: string) {
+async function deleteKnowledgeBaseDocument(document: KnowledgeBaseDocument) {
   const knowledgeBase = activeKnowledgeBase.value
   if (!knowledgeBase) return
+  if (knowledgeBaseUploading.value || isKnowledgeBaseDocumentDeleting(document.id)) return
 
-  const index = knowledgeBase.documents.findIndex((document) => document.id === documentId)
-  if (index < 0) return
-  knowledgeBase.documents.splice(index, 1)
-  syncKnowledgeBaseDocumentStats(knowledgeBase)
+  const previousDocuments = [...knowledgeBase.documents]
+  const previousHighlightedId = highlightedKnowledgeFileId.value
+  knowledgeBaseError.value = ''
+  setKnowledgeBaseDocumentDeleting(document.id, true)
+  replaceKnowledgeBaseDocuments(
+    knowledgeBase.id,
+    knowledgeBase.documents.filter((item) => item.id !== document.id)
+  )
+  highlightedKnowledgeFileId.value = activeKnowledgeBaseDocuments.value[0]?.id || ''
+
+  try {
+    const response = await deleteRemoteKnowledgeBaseDocument(knowledgeBase.id, document.id)
+    replaceKnowledgeBaseDocuments(knowledgeBase.id, response.documents)
+    highlightedKnowledgeFileId.value = response.documents[0]?.id || ''
+  } catch (error) {
+    replaceKnowledgeBaseDocuments(knowledgeBase.id, previousDocuments)
+    highlightedKnowledgeFileId.value = previousHighlightedId
+    knowledgeBaseError.value = getKnowledgeBaseErrorMessage(error)
+  } finally {
+    setKnowledgeBaseDocumentDeleting(document.id, false)
+  }
 }
 
 function syncKnowledgeBaseDocumentStats(knowledgeBase: KnowledgeBase) {
   knowledgeBase.documentCount = knowledgeBase.documents.length
-  knowledgeBase.updatedAt = formatDateOnly(Date.now())
+  const latestUploadedAt = knowledgeBase.documents.reduce((latest, document) => Math.max(latest, document.uploadedAt), 0)
+  knowledgeBase.updatedAt = latestUploadedAt ? formatDateOnly(latestUploadedAt) : knowledgeBase.updatedAt || formatDateOnly(Date.now())
 }
 
-function deleteKnowledgeBase(knowledgeBaseId: string) {
+function openKnowledgeBaseDeleteConfirm(knowledgeBase: KnowledgeBase) {
+  if (knowledgeBaseLoading.value) return
+  pendingKnowledgeBaseDelete.value = knowledgeBase
+  knowledgeBaseDeleteConfirmOpen.value = true
+}
+
+function closeKnowledgeBaseDeleteConfirm() {
+  knowledgeBaseDeleteConfirmOpen.value = false
+  pendingKnowledgeBaseDelete.value = null
+}
+
+function confirmKnowledgeBaseDelete() {
+  const knowledgeBase = pendingKnowledgeBaseDelete.value
+  if (!knowledgeBase) return
+  closeKnowledgeBaseDeleteConfirm()
+  void deleteKnowledgeBase(knowledgeBase.id)
+}
+
+async function deleteKnowledgeBase(knowledgeBaseId: string) {
   const index = knowledgeBases.value.findIndex((item) => item.id === knowledgeBaseId)
   if (index < 0) return
 
-  knowledgeBases.value.splice(index, 1)
-  if (selectedKnowledgeBaseDetailId.value === knowledgeBaseId) {
-    closeKnowledgeBaseDetail()
-  }
-  if (selectedSeoKnowledgeBaseId.value === knowledgeBaseId) {
-    selectedSeoKnowledgeBaseId.value = KNOWLEDGE_BASE_NONE_ID
-  }
-  if (selectedCopyKnowledgeBaseId.value === knowledgeBaseId) {
-    selectedCopyKnowledgeBaseId.value = KNOWLEDGE_BASE_NONE_ID
-  }
-  if (selectedManagedKnowledgeBaseId.value === knowledgeBaseId) {
-    selectedManagedKnowledgeBaseId.value = knowledgeBases.value[Math.max(0, index - 1)]?.id || knowledgeBases.value[0]?.id || ''
+  knowledgeBaseLoading.value = true
+  knowledgeBaseError.value = ''
+  try {
+    await deleteRemoteKnowledgeBase(knowledgeBaseId)
+    knowledgeBases.value.splice(index, 1)
+    if (selectedKnowledgeBaseDetailId.value === knowledgeBaseId) {
+      closeKnowledgeBaseDetail()
+    }
+    if (selectedSeoKnowledgeBaseId.value === knowledgeBaseId) {
+      selectedSeoKnowledgeBaseId.value = KNOWLEDGE_BASE_NONE_ID
+    }
+    if (selectedCopyKnowledgeBaseId.value === knowledgeBaseId) {
+      selectedCopyKnowledgeBaseId.value = KNOWLEDGE_BASE_NONE_ID
+    }
+    if (selectedManagedKnowledgeBaseId.value === knowledgeBaseId) {
+      selectedManagedKnowledgeBaseId.value = knowledgeBases.value[Math.max(0, index - 1)]?.id || knowledgeBases.value[0]?.id || ''
+    }
+  } catch (error) {
+    knowledgeBaseError.value = getKnowledgeBaseErrorMessage(error)
+  } finally {
+    knowledgeBaseLoading.value = false
   }
 }
 
@@ -3449,7 +3696,8 @@ async function submitSeo() {
       business_description: requestPayload.business,
       product_features: requestPayload.features,
       keyword_count: requestPayload.keywordCount,
-      search_engines: ['百度', '360搜索', '必应']
+      search_engines: ['百度', '360搜索', '必应'],
+      knowledge_base: requestPayload.knowledgeBase
     })
     seoResults.value = response.items
     seoModel.value = response.model
@@ -3515,7 +3763,8 @@ async function submitCopy() {
       keyword_repeat_count: requestPayload.keywordOccurrences,
       article_count: requestPayload.articleCount,
       platform_styles: requestPayload.platforms,
-      copy_length: requestPayload.copyLength
+      copy_length: requestPayload.copyLength,
+      knowledge_base: requestPayload.knowledgeBase
     })
     copyResults.value = response.items
     copyModel.value = response.model
@@ -3617,91 +3866,6 @@ function loadSessions(): ChatSession[] {
   }
 }
 
-function loadKnowledgeBases(): KnowledgeBase[] {
-  try {
-    const raw = localStorage.getItem(KNOWLEDGE_BASE_STORAGE_KEY)
-    if (!raw) return createDefaultKnowledgeBases()
-    const parsed = JSON.parse(raw) as KnowledgeBase[]
-    if (!Array.isArray(parsed)) return createDefaultKnowledgeBases()
-    const defaultKnowledgeBases = createDefaultKnowledgeBases()
-    const normalized = parsed
-      .map((item) => {
-        const fallback = defaultKnowledgeBases.find((knowledgeBase) => knowledgeBase.id === item?.id)
-        const documents = normalizeKnowledgeBaseDocuments(item?.documents, fallback?.documents || [])
-        const latestUploadedAt = documents.reduce((latest, document) => Math.max(latest, document.uploadedAt), 0)
-        return {
-          id: String(item?.id || '').trim(),
-          name: String(item?.name || '').trim(),
-          documentCount: documents.length,
-          updatedAt: String(item?.updatedAt || '').trim() || (latestUploadedAt ? formatDateOnly(latestUploadedAt) : fallback?.updatedAt || ''),
-          documents
-        }
-      })
-      .filter((item) => item.id && item.name)
-    return normalized.length ? normalized : createDefaultKnowledgeBases()
-  } catch (error) {
-    console.warn('读取知识库列表失败', error)
-    return createDefaultKnowledgeBases()
-  }
-}
-
-function saveKnowledgeBases(items: KnowledgeBase[]) {
-  localStorage.setItem(KNOWLEDGE_BASE_STORAGE_KEY, JSON.stringify(items))
-}
-
-function createDefaultKnowledgeBases(): KnowledgeBase[] {
-  const productDocuments = [
-    createKnowledgeDocument('kb-1-doc-prd', '产品需求文档.pdf', 2.4 * 1024 * 1024, '2026-06-20'),
-    createKnowledgeDocument('kb-1-doc-manual', '用户手册_v2.docx', 1.1 * 1024 * 1024, '2026-06-18'),
-    createKnowledgeDocument('kb-1-doc-api', 'API接口文档.md', 320 * 1024, '2026-06-15'),
-    createKnowledgeDocument('kb-1-doc-architecture', '技术架构说明.pdf', 4.7 * 1024 * 1024, '2026-06-12'),
-    createKnowledgeDocument('kb-1-doc-analysis', '竞品分析表.xlsx', 860 * 1024, '2026-06-10')
-  ]
-  const operationDocuments = [
-    createKnowledgeDocument('kb-2-doc-plan', '运营投放计划.xlsx', 940 * 1024, '2026-06-18'),
-    createKnowledgeDocument('kb-2-doc-copy', '高转化文案库.md', 260 * 1024, '2026-06-17'),
-    createKnowledgeDocument('kb-2-doc-channel', '渠道复盘报告.pdf', 1.8 * 1024 * 1024, '2026-06-12')
-  ]
-  const productDocDocuments = [
-    createKnowledgeDocument('kb-product-docs-doc-roadmap', '产品路线图.pdf', 3.1 * 1024 * 1024, '2026-06-15'),
-    createKnowledgeDocument('kb-product-docs-doc-faq', 'FAQ知识整理.md', 180 * 1024, '2026-06-11')
-  ]
-
-  return [
-    { id: 'kb-1', name: '知识库1', documentCount: productDocuments.length, updatedAt: '2026-06-20', documents: productDocuments },
-    { id: 'kb-2', name: '知识库2', documentCount: operationDocuments.length, updatedAt: '2026-06-18', documents: operationDocuments },
-    {
-      id: 'kb-product-docs',
-      name: '产品文档库',
-      documentCount: productDocDocuments.length,
-      updatedAt: '2026-06-15',
-      documents: productDocDocuments
-    }
-  ]
-}
-
-function createKnowledgeDocument(id: string, name: string, size: number, date: string): KnowledgeBaseDocument {
-  return {
-    id,
-    name,
-    size: Math.round(size),
-    uploadedAt: new Date(`${date}T00:00:00`).getTime()
-  }
-}
-
-function normalizeKnowledgeBaseDocuments(value: unknown, fallback: KnowledgeBaseDocument[]): KnowledgeBaseDocument[] {
-  if (!Array.isArray(value)) return fallback.map((document) => ({ ...document }))
-
-  return value
-    .map((document) => ({
-      id: String(document?.id || createId()).trim(),
-      name: String(document?.name || '').trim(),
-      size: Math.max(0, Number(document?.size) || 0),
-      uploadedAt: Number(document?.uploadedAt) || Date.now()
-    }))
-    .filter((document) => document.id && document.name)
-}
-
 function saveSessions(items: ChatSession[]) {
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(items))
 }
@@ -3745,6 +3909,10 @@ function formatKnowledgeFileSize(size: number) {
   return `${(size / megabyte).toFixed(1)} MB`
 }
 
+function formatKnowledgeFileDate(timestamp: number) {
+  return timestamp > 0 ? formatDateOnly(timestamp) : '未知日期'
+}
+
 function getKnowledgeFileType(fileName: string) {
   const extension = fileName.split('.').pop()?.toLowerCase() || ''
   if (extension === 'pdf') return 'pdf'
@@ -3760,6 +3928,17 @@ function getErrorMessage(error: unknown) {
   return '请求失败，请检查模型设置或稍后重试'
 }
 
+function getKnowledgeBaseErrorMessage(error: unknown) {
+  const message = getErrorMessage(error)
+  if (message.includes('WinError 32') || message.includes('另一个程序正在使用此文件')) {
+    return '文件处理已完成，但知识库服务清理临时文件时被占用。请关闭正在打开的同名文件后再刷新。'
+  }
+  if (message.includes('process_log')) {
+    return '知识库服务处理文件时返回异常，请稍后刷新后再试。'
+  }
+  return message.length > 120 ? `${message.slice(0, 117)}...` : message
+}
+
 watch(
   () => getPublishImageSourceKey(),
   (sourceKey) => {
@@ -3772,14 +3951,6 @@ watch(
     publishImagePrompts.value = []
     publishImagePromptSourceKey.value = ''
   }
-)
-
-watch(
-  knowledgeBases,
-  (items) => {
-    saveKnowledgeBases(items)
-  },
-  { deep: true }
 )
 
 watch(
@@ -3811,6 +3982,7 @@ watch(
 
 onMounted(() => {
   document.title = 'Market Sales'
+  void refreshKnowledgeBases()
   void loadXhsAccounts()
 })
 
@@ -7843,6 +8015,7 @@ webview,
 .image-preview-dialog,
 .knowledge-manager-dialog,
 .knowledge-detail-dialog,
+.knowledge-delete-dialog,
 .knowledge-create-dialog {
   position: relative;
   border: 1px solid rgba(229, 231, 235, 0.9);
@@ -8067,6 +8240,16 @@ webview,
   color: #ef4444;
 }
 
+.knowledge-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.knowledge-delete-button:disabled:hover {
+  background: transparent;
+  color: #a3adbd;
+}
+
 .knowledge-delete-button svg {
   width: 18px;
   height: 18px;
@@ -8207,6 +8390,17 @@ webview,
   border-color: #b9bbff;
   background: #fbfbff;
   box-shadow: inset 0 0 0 1px rgba(143, 146, 255, 0.14);
+}
+
+.knowledge-upload-dropzone:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.knowledge-upload-dropzone:disabled:hover {
+  border-color: #e1e5ee;
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .knowledge-upload-icon {
@@ -8367,6 +8561,16 @@ webview,
   color: #ef4444;
 }
 
+.knowledge-file-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.knowledge-file-delete:disabled:hover {
+  background: transparent;
+  color: #d5d9e2;
+}
+
 .knowledge-file-delete svg {
   width: 18px;
   height: 18px;
@@ -8427,6 +8631,123 @@ webview,
 
 .knowledge-create-scrim {
   z-index: 90;
+}
+
+.knowledge-delete-scrim {
+  z-index: 92;
+}
+
+.knowledge-delete-dialog {
+  display: grid;
+  width: min(486px, calc(100vw - 32px));
+  border-radius: 18px;
+  padding: 29px 30px 27px;
+}
+
+.knowledge-delete-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 24px;
+}
+
+.knowledge-delete-header h2 {
+  margin: 0;
+  color: #262b3a;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 28px;
+}
+
+.knowledge-delete-header p {
+  margin: 5px 0 0;
+  color: #a5aebd;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 20px;
+}
+
+.knowledge-delete-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+}
+
+.knowledge-delete-close:hover {
+  background: #f8f9fc;
+}
+
+.knowledge-delete-target {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 70px;
+  border-radius: 16px;
+  background: #fbfcff;
+  padding: 12px 14px;
+}
+
+.knowledge-delete-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff0f2;
+  color: #ef4444;
+}
+
+.knowledge-delete-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2;
+}
+
+.knowledge-delete-target strong {
+  overflow: hidden;
+  color: #344054;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-delete-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.knowledge-delete-submit {
+  display: inline-flex;
+  min-width: 132px;
+  min-height: 45px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: #ef4444;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+  padding: 0 20px;
+  white-space: nowrap;
+}
+
+.knowledge-delete-submit:hover {
+  background: #dc2626;
+}
+
+.knowledge-delete-submit svg {
+  width: 16px;
+  height: 16px;
 }
 
 .knowledge-create-dialog {

@@ -48,14 +48,19 @@ XIAOHONGSHU_SYMBOL_COPY_RULES = """
 """.strip()
 
 
-def build_seo_user_prompt(payload: SeoKeywordRequest, web_context: str) -> str:
+def build_seo_user_prompt(
+    payload: SeoKeywordRequest,
+    web_context: str,
+    knowledge_context: str = "",
+) -> str:
     engines = "、".join(payload.search_engines)
+    knowledge_context_section = _build_knowledge_context_section(knowledge_context)
     return f"""
 用户业务：{payload.business_description}
 产品特点：{payload.product_features}
 
 联网搜索上下文（来自 Tavily）：
-{web_context}
+{web_context}{knowledge_context_section}
 
 请生成 {payload.keyword_count} 个关键词，覆盖短尾词、长尾词、问题词。
 针对搜索引擎：{engines} 的搜索习惯优化。
@@ -72,12 +77,17 @@ items 是数组，每个对象必须包含：
 3. search_volume_est 使用合理估算区间。
 4. difficulty 使用中文：低、中、高。
 5. 关键词要结合联网搜索上下文里的真实搜索意图、用户痛点、竞品表达和热门问题。
-6. 不要编造具体来源中没有的确定性数据；search_volume_est 只能做区间估算。
-7. 不要输出字段说明，不要输出示例值。
+6. 如果提供了知识库上下文，优先结合其中的业务资料、产品资料和用户已有文档表述。
+7. 不要编造具体来源中没有的确定性数据；search_volume_est 只能做区间估算。
+8. 不要输出字段说明，不要输出示例值。
 """.strip()
 
 
-def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str) -> str:
+def build_copywriting_user_prompt(
+    payload: CopywritingRequest,
+    web_context: str,
+    knowledge_context: str = "",
+) -> str:
     platforms = "、".join(payload.platform_styles)
     platform_rules = "\n".join(_get_platform_rule(platform) for platform in payload.platform_styles)
     xiaohongshu_traffic_rules = (
@@ -90,6 +100,7 @@ def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str)
     business_description = payload.business_description or "未提供"
     product_features = payload.product_features or "未提供"
     recommendation_rules = _build_product_recommendation_rules(payload)
+    knowledge_context_section = _build_knowledge_context_section(knowledge_context)
     return f"""
 你是一名资深 SEO 内容营销专家和新媒体文案策划。
 
@@ -101,7 +112,7 @@ def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str)
 - 产品特点：{product_features}
 
 联网搜索上下文（来自 Tavily）：
-{web_context}
+{web_context}{knowledge_context_section}
 
 {recommendation_rules}
 
@@ -131,6 +142,7 @@ def build_copywriting_user_prompt(payload: CopywritingRequest, web_context: str)
 内容质量要求：
 - 每篇必须是可直接发布的完整成品文案，不要写大纲、思路、示例、节选或占位文本。
 - 必须优先围绕用户业务和产品特点展开，把产品卖点、目标用户、使用场景写具体；不要只基于关键词写泛行业套话。
+- 如果提供了知识库上下文，必须优先吸收其中的产品事实、业务素材、已有资料和专有名词；不得和知识库资料冲突。
 - 如果用户业务或产品特点为"未提供"，不要自行编造搜索结果中没有的品牌、功能、价格、销量、资质或承诺。
 - 当关键词具有推荐、选购、对比、性价比、榜单、清单等意图时，必须从联网搜索上下文中提取并引用具体的产品型号、品牌名称、关键参数和价格信息，自然融入文案正文；不要泛泛而谈只写品类，要让读者看到具体的产品推荐。
 - 如果搜索上下文提供了多个产品，推荐/选购类文案至少要具体提及 2-3 款产品，包括型号名称和核心卖点差异。
@@ -230,3 +242,14 @@ def _get_platform_rule(platform: str) -> str:
         platform,
         f"{platform}：根据平台名称推断用户场景，只生成适合“{platform}”发布的成品文案，并包含标题感正文、结尾引导和 #标签。",
     )
+
+
+def _build_knowledge_context_section(knowledge_context: str) -> str:
+    context = knowledge_context.strip()
+    if not context:
+        return ""
+    return f"""
+
+知识库上下文（来自用户选择的知识库）：
+{context}
+""".rstrip()

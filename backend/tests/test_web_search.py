@@ -37,6 +37,22 @@ def test_seo_prompt_includes_web_context():
     assert "真实用户常搜索续航、运动记录和防水。" in prompt
 
 
+def test_seo_prompt_includes_knowledge_context():
+    prompt = build_seo_user_prompt(
+        SeoKeywordRequest(
+            business_description="智能手表",
+            product_features="支持心率监测和 GPS",
+            keyword_count=3,
+            search_engines=["百度"],
+        ),
+        "真实用户常搜索续航、运动记录和防水。",
+        "知识库：产品文档库\n核心卖点：企业级运动健康数据。",
+    )
+
+    assert "知识库上下文（来自用户选择的知识库）" in prompt
+    assert "企业级运动健康数据" in prompt
+
+
 def test_copywriting_prompt_includes_web_context():
     prompt = build_copywriting_user_prompt(
         CopywritingRequest(
@@ -56,6 +72,26 @@ def test_copywriting_prompt_includes_web_context():
     assert "我是做什么的：高端智能家居设备厂商" in prompt
     assert "产品特点：支持语音控制，兼容米家和苹果 HomeKit" in prompt
     assert "必须优先围绕用户业务和产品特点展开" in prompt
+
+
+def test_copywriting_prompt_includes_knowledge_context():
+    prompt = build_copywriting_user_prompt(
+        CopywritingRequest(
+            business_description="高端智能家居设备厂商",
+            product_features="支持语音控制，兼容米家和苹果 HomeKit",
+            keyword="智能家居推荐",
+            keyword_repeat_count=1,
+            article_count=1,
+            platform_styles=["小红书"],
+            copy_length="中",
+        ),
+        "近期内容讨论集中在全屋智能。",
+        "知识库：产品文档库\n内部资料：安装只需要15分钟。",
+    )
+
+    assert "知识库上下文（来自用户选择的知识库）" in prompt
+    assert "安装只需要15分钟" in prompt
+    assert "不得和知识库资料冲突" in prompt
 
 
 def test_copywriting_search_query_includes_product_context():

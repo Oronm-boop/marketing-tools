@@ -1,10 +1,12 @@
 import request from '@utils/request'
+import type { KnowledgeBaseReference } from './knowledge'
 
 export type SeoKeywordPayload = {
   business_description: string
   product_features: string
   keyword_count: number
   search_engines: string[]
+  knowledge_base?: KnowledgeBaseReference | null
 }
 
 export type SeoKeywordItem = {
@@ -26,6 +28,7 @@ export type CopywritingPayload = {
   article_count: number
   platform_styles: string[]
   copy_length: CopyLength
+  knowledge_base?: KnowledgeBaseReference | null
 }
 
 export type CopyLength = '短' | '中' | '长'

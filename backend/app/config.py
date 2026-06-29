@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     generated_image_cache_dir: Path = Field(default_factory=default_generated_image_cache_dir)
     generated_image_cache_max_age_seconds: int = Field(default=31536000, gt=0)
 
+    # 知识库接口服务（独立 FastAPI 服务，端口沿用现有 20090）
+    knowledge_base_url: str = "http://192.168.0.250:20090"
+    knowledge_base_timeout_seconds: float = Field(default=300, gt=0)
+
     request_timeout_seconds: float = 300
     cors_allow_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,"

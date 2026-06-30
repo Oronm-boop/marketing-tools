@@ -260,6 +260,9 @@ class ModelSettingsRead(BaseModel):
     comfyui_base_url: str
     comfyui_video_base_url: str
 
+    knowledge_base_url: str
+    browser_automation_show_window: bool
+
 
 class ModelSettingsWrite(BaseModel):
     """前端提交的模型配置更新请求。"""
@@ -278,6 +281,9 @@ class ModelSettingsWrite(BaseModel):
 
     comfyui_base_url: str | None = None
     comfyui_video_base_url: str | None = None
+
+    knowledge_base_url: str | None = None
+    browser_automation_show_window: bool | None = None
 
 
 def _clean_string_list(value: Any) -> list[str]:

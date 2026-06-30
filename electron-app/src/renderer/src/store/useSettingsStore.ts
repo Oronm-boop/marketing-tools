@@ -6,7 +6,7 @@ import type { ModelProvider, ModelSettingsRead, ModelSettingsWrite } from '@api/
 export const useSettingsStore = defineStore('settings', () => {
   const provider = ref<ModelProvider>('local')
 
-  const localModelBaseUrl = ref('http://192.168.0.105:8081/v1')
+  const localModelBaseUrl = ref('http://127.0.0.1:8081/v1')
   const localModelName = ref('Qwen3.6-35B-A3B-UD-Q8_K_XL')
 
   const ollamaBaseUrl = ref('http://localhost:11434/v1')
@@ -16,8 +16,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const qwenBaseUrl = ref('https://dashscope.aliyuncs.com/compatible-mode/v1')
   const qwenModel = ref('qwen-plus')
 
-  const comfyuiBaseUrl = ref('http://192.168.0.122:8188')
-  const comfyuiVideoBaseUrl = ref('http://192.168.0.122:8188')
+  const comfyuiBaseUrl = ref('http://127.0.0.1:8188')
+  const comfyuiVideoBaseUrl = ref('http://127.0.0.1:8188')
+  const knowledgeBaseUrl = ref('http://127.0.0.1:20090')
+  const browserAutomationShowWindow = ref(false)
 
   const loading = ref(false)
   const saving = ref(false)
@@ -33,6 +35,8 @@ export const useSettingsStore = defineStore('settings', () => {
     qwenModel.value = data.qwen_model
     comfyuiBaseUrl.value = data.comfyui_base_url
     comfyuiVideoBaseUrl.value = data.comfyui_video_base_url
+    knowledgeBaseUrl.value = data.knowledge_base_url
+    browserAutomationShowWindow.value = data.browser_automation_show_window
   }
 
   async function load() {
@@ -66,6 +70,8 @@ export const useSettingsStore = defineStore('settings', () => {
     qwenModel,
     comfyuiBaseUrl,
     comfyuiVideoBaseUrl,
+    knowledgeBaseUrl,
+    browserAutomationShowWindow,
     loading,
     saving,
     load,

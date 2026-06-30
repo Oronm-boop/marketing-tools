@@ -6,283 +6,184 @@
         <div class="dialog-header">
           <div class="header-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
           <div>
             <h2 id="settings-title">模型设置</h2>
-            <p>配置大模型和 ComfyUI 服务地址</p>
+            <p>配置大模型、ComfyUI 和知识库服务地址</p>
           </div>
           <button class="close-btn" type="button" aria-label="关闭" @click="handleClose">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg>
           </button>
         </div>
 
-        <!-- 提供商选择 -->
-        <div class="section">
-          <label class="section-label">大模型类型</label>
-          <div class="provider-tabs" role="radiogroup" aria-label="大模型类型">
-            <button
-              v-for="opt in providerOptions"
-              :key="opt.value"
-              type="button"
-              role="radio"
-              :aria-checked="form.provider === opt.value"
-              class="provider-tab"
-              :class="{ active: form.provider === opt.value }"
-              @click="form.provider = opt.value"
-            >
-              <span class="provider-tab-icon" aria-hidden="true" v-html="opt.icon" />
-              <span class="provider-tab-label">{{ opt.label }}</span>
-              <span class="provider-tab-desc">{{ opt.desc }}</span>
-            </button>
-          </div>
-        </div>
+        <div class="dialog-body">
+          <aside class="settings-sidebar">
+            <!-- 提供商选择 -->
+            <div class="section provider-section">
+              <label class="section-label">大模型类型</label>
+              <div class="provider-tabs" role="radiogroup" aria-label="大模型类型">
+                <button v-for="opt in providerOptions" :key="opt.value" type="button" role="radio" :aria-checked="form.provider === opt.value" class="provider-tab" :class="{ active: form.provider === opt.value }" @click="form.provider = opt.value">
+                  <span class="provider-tab-icon" aria-hidden="true" v-html="opt.icon" />
+                  <span class="provider-tab-text">
+                    <span class="provider-tab-label">{{ opt.label }}</span>
+                    <span class="provider-tab-desc">{{ opt.desc }}</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </aside>
 
-        <!-- ComfyUI 配置 -->
-        <div class="section fields-section">
-          <div class="section-title">
-            <span class="section-dot dot-comfyui" aria-hidden="true"></span>
-            ComfyUI 服务配置
-          </div>
-          <div class="field-row two-col">
-            <div class="field">
-              <label class="field-label" for="comfyui-image-ip">生图 IP 地址</label>
-              <input
-                id="comfyui-image-ip"
-                v-model="comfyuiImageHost"
-                type="text"
-                class="field-input"
-                placeholder="192.168.0.122"
-                autocomplete="off"
-                spellcheck="false"
-              />
+          <div class="settings-content">
+            <!-- ComfyUI 配置 -->
+            <div class="section fields-section comfyui-section">
+              <div class="section-title">
+                <span class="section-dot dot-comfyui" aria-hidden="true"></span>
+                ComfyUI 服务配置
+              </div>
+              <div class="field-row two-col">
+                <div class="field">
+                  <label class="field-label" for="comfyui-image-ip">生图 IP 地址</label>
+                  <input id="comfyui-image-ip" v-model="comfyuiImageHost" type="text" class="field-input" placeholder="127.0.0.1" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="comfyui-image-port">端口</label>
+                  <input id="comfyui-image-port" v-model="comfyuiImagePort" type="number" class="field-input" placeholder="8188" min="1" max="65535" />
+                </div>
+              </div>
+              <div class="url-preview">
+                <span class="url-preview-label">生图地址：</span>
+                <code>{{ comfyuiBaseUrl }}</code>
+              </div>
+              <div class="field-row two-col">
+                <div class="field">
+                  <label class="field-label" for="comfyui-video-ip">生视频 IP 地址</label>
+                  <input id="comfyui-video-ip" v-model="comfyuiVideoHost" type="text" class="field-input" placeholder="127.0.0.1" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="comfyui-video-port">端口</label>
+                  <input id="comfyui-video-port" v-model="comfyuiVideoPort" type="number" class="field-input" placeholder="8188" min="1" max="65535" />
+                </div>
+              </div>
+              <div class="url-preview">
+                <span class="url-preview-label">生视频地址：</span>
+                <code>{{ comfyuiVideoBaseUrl }}</code>
+              </div>
             </div>
-            <div class="field">
-              <label class="field-label" for="comfyui-image-port">端口</label>
-              <input
-                id="comfyui-image-port"
-                v-model="comfyuiImagePort"
-                type="number"
-                class="field-input"
-                placeholder="8188"
-                min="1"
-                max="65535"
-              />
-            </div>
-          </div>
-          <div class="url-preview">
-            <span class="url-preview-label">生图地址：</span>
-            <code>{{ comfyuiBaseUrl }}</code>
-          </div>
-          <div class="field-row two-col">
-            <div class="field">
-              <label class="field-label" for="comfyui-video-ip">生视频 IP 地址</label>
-              <input
-                id="comfyui-video-ip"
-                v-model="comfyuiVideoHost"
-                type="text"
-                class="field-input"
-                placeholder="192.168.0.122"
-                autocomplete="off"
-                spellcheck="false"
-              />
-            </div>
-            <div class="field">
-              <label class="field-label" for="comfyui-video-port">端口</label>
-              <input
-                id="comfyui-video-port"
-                v-model="comfyuiVideoPort"
-                type="number"
-                class="field-input"
-                placeholder="8188"
-                min="1"
-                max="65535"
-              />
-            </div>
-          </div>
-          <div class="url-preview">
-            <span class="url-preview-label">生视频地址：</span>
-            <code>{{ comfyuiVideoBaseUrl }}</code>
-          </div>
-        </div>
 
-        <!-- 局域网AI一体机 配置 -->
-        <div v-if="form.provider === 'local'" class="section fields-section">
-          <div class="section-title">
-            <span class="section-dot dot-local" aria-hidden="true"></span>
-            局域网 AI 一体机配置
-          </div>
-          <div class="field-row two-col">
-            <div class="field">
-              <label class="field-label" for="local-ip">服务器 IP 地址</label>
-              <input
-                id="local-ip"
-                v-model="localIp"
-                type="text"
-                class="field-input"
-                placeholder="192.168.0.105"
-                autocomplete="off"
-                spellcheck="false"
-              />
+            <!-- 知识库配置 -->
+            <div class="section fields-section">
+              <div class="section-title">
+                <span class="section-dot dot-knowledge" aria-hidden="true"></span>
+                知识库服务配置
+              </div>
+              <div class="field-row two-col">
+                <div class="field">
+                  <label class="field-label" for="knowledge-base-ip">服务 IP 地址</label>
+                  <input id="knowledge-base-ip" v-model="knowledgeBaseHost" type="text" class="field-input" placeholder="127.0.0.1" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="knowledge-base-port">端口</label>
+                  <input id="knowledge-base-port" v-model="knowledgeBasePort" type="number" class="field-input" placeholder="20090" min="1" max="65535" />
+                </div>
+              </div>
+              <div class="url-preview">
+                <span class="url-preview-label">知识库地址：</span>
+                <code>{{ knowledgeBaseUrl }}</code>
+              </div>
             </div>
-            <div class="field">
-              <label class="field-label" for="local-port">端口</label>
-              <input
-                id="local-port"
-                v-model="localPort"
-                type="number"
-                class="field-input"
-                placeholder="8081"
-                min="1"
-                max="65535"
-              />
-            </div>
-          </div>
-          <div class="field">
-            <label class="field-label" for="local-model">模型名称</label>
-            <input
-              id="local-model"
-              v-model="form.localModelName"
-              type="text"
-              class="field-input"
-              placeholder="Qwen3.6-35B-A3B-UD-Q8_K_XL"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </div>
-          <div class="url-preview">
-            <span class="url-preview-label">接口地址：</span>
-            <code>{{ localBaseUrl }}</code>
-          </div>
-        </div>
 
-        <!-- Ollama 本地模型 配置 -->
-        <div v-if="form.provider === 'ollama'" class="section fields-section">
-          <div class="section-title">
-            <span class="section-dot dot-ollama" aria-hidden="true"></span>
-            本地 Ollama 配置
-          </div>
-          <div class="field-row two-col">
-            <div class="field">
-              <label class="field-label" for="ollama-host">主机地址</label>
-              <input
-                id="ollama-host"
-                v-model="ollamaHost"
-                type="text"
-                class="field-input"
-                placeholder="localhost"
-                autocomplete="off"
-                spellcheck="false"
-              />
+            <!-- 浏览器自动化配置 -->
+            <div class="section fields-section automation-section">
+              <div class="section-title">
+                <span class="section-dot dot-automation" aria-hidden="true"></span>
+                浏览器自动化
+              </div>
+              <label class="switch-row" for="browser-automation-show-window">
+                <span class="switch-copy">
+                  <span class="switch-title">显示后台操作界面</span>
+                  <span class="switch-desc">开启后，发布时显示自动化浏览器窗口</span>
+                </span>
+                <input id="browser-automation-show-window" v-model="browserAutomationShowWindow" class="switch-input" type="checkbox" />
+                <span class="switch-control" aria-hidden="true"></span>
+              </label>
             </div>
-            <div class="field">
-              <label class="field-label" for="ollama-port">端口</label>
-              <input
-                id="ollama-port"
-                v-model="ollamaPort"
-                type="number"
-                class="field-input"
-                placeholder="11434"
-                min="1"
-                max="65535"
-              />
-            </div>
-          </div>
-          <div class="field">
-            <label class="field-label" for="ollama-model">模型名称</label>
-            <input
-              id="ollama-model"
-              v-model="form.ollamaModel"
-              type="text"
-              class="field-input"
-              placeholder="llama3.2"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <span class="field-hint">可通过 <code>ollama list</code> 查看已安装的模型</span>
-          </div>
-          <div class="url-preview">
-            <span class="url-preview-label">接口地址：</span>
-            <code>{{ ollamaBaseUrl }}</code>
-          </div>
-        </div>
 
-        <!-- 云端大模型 配置 -->
-        <div v-if="form.provider === 'bailian'" class="section fields-section">
-          <div class="section-title">
-            <span class="section-dot dot-cloud" aria-hidden="true"></span>
-            云端大模型配置
-          </div>
-          <div class="field">
-            <label class="field-label" for="qwen-api-key">
-              API Key
-              <span class="required-mark" aria-hidden="true">*</span>
-            </label>
-            <div class="input-with-toggle">
-              <input
-                id="qwen-api-key"
-                v-model="form.qwenApiKey"
-                :type="showApiKey ? 'text' : 'password'"
-                class="field-input"
-                placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-                autocomplete="new-password"
-                spellcheck="false"
-              />
-              <button
-                type="button"
-                class="toggle-visibility"
-                :aria-label="showApiKey ? '隐藏 API Key' : '显示 API Key'"
-                @click="showApiKey = !showApiKey"
-              >
-                <svg v-if="!showApiKey" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-              </button>
+            <!-- 局域网AI一体机 配置 -->
+            <div v-if="form.provider === 'local'" class="section fields-section">
+              <div class="section-title">
+                <span class="section-dot dot-local" aria-hidden="true"></span>
+                局域网 AI 一体机配置
+              </div>
+              <div class="field-row two-col">
+                <div class="field">
+                  <label class="field-label" for="local-ip">服务器 IP 地址</label>
+                  <input id="local-ip" v-model="localIp" type="text" class="field-input" placeholder="127.0.0.1" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="local-port">端口</label>
+                  <input id="local-port" v-model="localPort" type="number" class="field-input" placeholder="8081" min="1" max="65535" />
+                </div>
+              </div>
+              <div class="field">
+                <label class="field-label" for="local-model">模型名称</label>
+                <input id="local-model" v-model="form.localModelName" type="text" class="field-input" placeholder="Qwen3.6-35B-A3B-UD-Q8_K_XL" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="url-preview">
+                <span class="url-preview-label">接口地址：</span>
+                <code>{{ localBaseUrl }}</code>
+              </div>
             </div>
-            <span v-if="isKeyMasked" class="field-hint">已保存 API Key，如需修改请重新输入</span>
-          </div>
-          <div class="field">
-            <label class="field-label" for="qwen-base-url">服务商接口地址</label>
-            <input
-              id="qwen-base-url"
-              v-model="form.qwenBaseUrl"
-              type="url"
-              class="field-input"
-              placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <span class="field-hint">阿里云百炼默认地址，如使用其他兼容 OpenAI 的服务商请修改</span>
-          </div>
-          <div class="field">
-            <label class="field-label" for="qwen-model">模型名称</label>
-            <input
-              id="qwen-model"
-              v-model="form.qwenModel"
-              type="text"
-              class="field-input"
-              placeholder="qwen-plus"
-              autocomplete="off"
-              spellcheck="false"
-            />
+
+            <!-- 云端大模型 配置 -->
+            <div v-if="form.provider === 'bailian'" class="section fields-section">
+              <div class="section-title">
+                <span class="section-dot dot-cloud" aria-hidden="true"></span>
+                云端大模型配置
+              </div>
+              <div class="field">
+                <label class="field-label" for="qwen-api-key">
+                  API Key
+                  <span class="required-mark" aria-hidden="true">*</span>
+                </label>
+                <div class="input-with-toggle">
+                  <input id="qwen-api-key" v-model="form.qwenApiKey" :type="showApiKey ? 'text' : 'password'" class="field-input" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="new-password" spellcheck="false" />
+                  <button type="button" class="toggle-visibility" :aria-label="showApiKey ? '隐藏 API Key' : '显示 API Key'" @click="showApiKey = !showApiKey">
+                    <svg v-if="!showApiKey" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                      <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                      <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                </div>
+                <span v-if="isKeyMasked" class="field-hint">已保存 API Key，如需修改请重新输入</span>
+              </div>
+              <div class="field">
+                <label class="field-label" for="qwen-base-url">服务商接口地址</label>
+                <input id="qwen-base-url" v-model="form.qwenBaseUrl" type="url" class="field-input" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" autocomplete="off" spellcheck="false" />
+                <span class="field-hint">阿里云百炼默认地址，如使用其他兼容 OpenAI 的服务商请修改</span>
+              </div>
+              <div class="field">
+                <label class="field-label" for="qwen-model">模型名称</label>
+                <input id="qwen-model" v-model="form.qwenModel" type="text" class="field-input" placeholder="qwen-plus" autocomplete="off" spellcheck="false" />
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- 错误提示 -->
         <div v-if="errorMsg" class="error-banner" role="alert">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
-            <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <line x1="12" y1="16" x2="12.01" y2="16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8" />
+            <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <line x1="12" y1="16" x2="12.01" y2="16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
           </svg>
           {{ errorMsg }}
         </div>
@@ -290,17 +191,15 @@
         <!-- 成功提示 -->
         <div v-if="successMsg" class="success-banner" role="status">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <polyline points="22 4 12 14.01 9 11.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <polyline points="22 4 12 14.01 9 11.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
           {{ successMsg }}
         </div>
 
         <!-- 底部操作 -->
         <div class="dialog-footer">
-          <button type="button" class="btn-secondary" :disabled="settingsStore.saving" @click="handleClose">
-            取消
-          </button>
+          <button type="button" class="btn-secondary" :disabled="settingsStore.saving" @click="handleClose">取消</button>
           <button type="button" class="btn-primary" :disabled="settingsStore.saving" @click="handleSave">
             <span v-if="settingsStore.saving" class="spinner" aria-hidden="true"></span>
             {{ settingsStore.saving ? '保存中…' : '保存设置' }}
@@ -325,10 +224,11 @@ const showApiKey = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
+type VisibleModelProvider = Exclude<ModelProvider, 'ollama'>
+
 interface FormState {
-  provider: ModelProvider
+  provider: VisibleModelProvider
   localModelName: string
-  ollamaModel: string
   qwenApiKey: string
   qwenBaseUrl: string
   qwenModel: string
@@ -337,43 +237,35 @@ interface FormState {
 const form = reactive<FormState>({
   provider: 'local',
   localModelName: '',
-  ollamaModel: '',
   qwenApiKey: '',
   qwenBaseUrl: '',
-  qwenModel: ''
+  qwenModel: '',
 })
 
-const localIp = ref('192.168.0.105')
+const localIp = ref('127.0.0.1')
 const localPort = ref('8081')
-const ollamaHost = ref('localhost')
-const ollamaPort = ref('11434')
-const comfyuiImageHost = ref('192.168.0.122')
+const comfyuiImageHost = ref('127.0.0.1')
 const comfyuiImagePort = ref('8188')
-const comfyuiVideoHost = ref('192.168.0.122')
+const comfyuiVideoHost = ref('127.0.0.1')
 const comfyuiVideoPort = ref('8188')
+const knowledgeBaseHost = ref('127.0.0.1')
+const knowledgeBasePort = ref('20090')
+const browserAutomationShowWindow = ref(false)
 
 const MASKED = '********'
 const isKeyMasked = computed(() => form.qwenApiKey === MASKED)
 
-const localBaseUrl = computed(
-  () => `http://${localIp.value || '192.168.0.105'}:${localPort.value || '8081'}/v1`
-)
-const ollamaBaseUrl = computed(
-  () => `http://${ollamaHost.value || 'localhost'}:${ollamaPort.value || '11434'}/v1`
-)
-const comfyuiBaseUrl = computed(
-  () => `http://${comfyuiImageHost.value.trim()}:${comfyuiImagePort.value.trim()}`
-)
-const comfyuiVideoBaseUrl = computed(
-  () => `http://${comfyuiVideoHost.value.trim()}:${comfyuiVideoPort.value.trim()}`
-)
+const localBaseUrl = computed(() => `http://${localIp.value || '127.0.0.1'}:${localPort.value || '8081'}/v1`)
+const comfyuiBaseUrl = computed(() => `http://${comfyuiImageHost.value.trim()}:${comfyuiImagePort.value.trim()}`)
+const comfyuiVideoBaseUrl = computed(() => `http://${comfyuiVideoHost.value.trim()}:${comfyuiVideoPort.value.trim()}`)
+const knowledgeBaseUrl = computed(() => `http://${knowledgeBaseHost.value.trim() || '127.0.0.1'}:${knowledgeBasePort.value.trim() || '20090'}`)
 
 function parseBaseUrl(url: string): { host: string; port: string } {
   try {
     const parsed = new URL(url)
     return {
       host: parsed.hostname,
-      port: parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
+      port: parsed.port || (parsed.protocol === 'https:' ? '443' : '80'),
     }
   } catch {
     return { host: '', port: '' }
@@ -385,7 +277,7 @@ function isValidPort(port: string): boolean {
   return Number.isInteger(value) && value >= 1 && value <= 65535
 }
 
-function validateComfyUIEndpoint(label: string, host: string, port: string): string {
+function validateServiceEndpoint(label: string, host: string, port: string): string {
   if (!host.trim()) {
     return `请输入 ${label} 的 IP 地址`
   }
@@ -396,28 +288,28 @@ function validateComfyUIEndpoint(label: string, host: string, port: string): str
 }
 
 function syncFromStore() {
-  form.provider = settingsStore.provider
+  form.provider = settingsStore.provider === 'bailian' ? 'bailian' : 'local'
   form.localModelName = settingsStore.localModelName
-  form.ollamaModel = settingsStore.ollamaModel
   form.qwenApiKey = settingsStore.qwenApiKey
   form.qwenBaseUrl = settingsStore.qwenBaseUrl
   form.qwenModel = settingsStore.qwenModel
 
   const localParsed = parseBaseUrl(settingsStore.localModelBaseUrl)
-  localIp.value = localParsed.host || '192.168.0.105'
+  localIp.value = localParsed.host || '127.0.0.1'
   localPort.value = localParsed.port || '8081'
 
-  const ollamaParsed = parseBaseUrl(settingsStore.ollamaBaseUrl)
-  ollamaHost.value = ollamaParsed.host || 'localhost'
-  ollamaPort.value = ollamaParsed.port || '11434'
-
   const comfyuiParsed = parseBaseUrl(settingsStore.comfyuiBaseUrl)
-  comfyuiImageHost.value = comfyuiParsed.host || '192.168.0.122'
+  comfyuiImageHost.value = comfyuiParsed.host || '127.0.0.1'
   comfyuiImagePort.value = comfyuiParsed.port || '8188'
 
   const comfyuiVideoParsed = parseBaseUrl(settingsStore.comfyuiVideoBaseUrl)
-  comfyuiVideoHost.value = comfyuiVideoParsed.host || '192.168.0.122'
+  comfyuiVideoHost.value = comfyuiVideoParsed.host || '127.0.0.1'
   comfyuiVideoPort.value = comfyuiVideoParsed.port || '8188'
+
+  const knowledgeBaseParsed = parseBaseUrl(settingsStore.knowledgeBaseUrl)
+  knowledgeBaseHost.value = knowledgeBaseParsed.host || '127.0.0.1'
+  knowledgeBasePort.value = knowledgeBaseParsed.port || '20090'
+  browserAutomationShowWindow.value = settingsStore.browserAutomationShowWindow
 }
 
 watch(
@@ -436,7 +328,7 @@ watch(
       }
       syncFromStore()
     }
-  }
+  },
 )
 
 function handleClose() {
@@ -452,11 +344,15 @@ async function handleSave() {
     return
   }
 
-  const comfyuiValidationError =
-    validateComfyUIEndpoint('ComfyUI 生图服务', comfyuiImageHost.value, comfyuiImagePort.value) ||
-    validateComfyUIEndpoint('ComfyUI 生视频服务', comfyuiVideoHost.value, comfyuiVideoPort.value)
+  const comfyuiValidationError = validateServiceEndpoint('ComfyUI 生图服务', comfyuiImageHost.value, comfyuiImagePort.value) || validateServiceEndpoint('ComfyUI 生视频服务', comfyuiVideoHost.value, comfyuiVideoPort.value)
   if (comfyuiValidationError) {
     errorMsg.value = comfyuiValidationError
+    return
+  }
+
+  const knowledgeBaseValidationError = validateServiceEndpoint('知识库服务', knowledgeBaseHost.value, knowledgeBasePort.value)
+  if (knowledgeBaseValidationError) {
+    errorMsg.value = knowledgeBaseValidationError
     return
   }
 
@@ -465,13 +361,13 @@ async function handleSave() {
       provider: form.provider,
       local_model_base_url: localBaseUrl.value,
       local_model_name: form.localModelName,
-      ollama_base_url: ollamaBaseUrl.value,
-      ollama_model: form.ollamaModel,
       qwen_api_key: form.qwenApiKey,
       qwen_base_url: form.qwenBaseUrl,
       qwen_model: form.qwenModel,
       comfyui_base_url: comfyuiBaseUrl.value,
-      comfyui_video_base_url: comfyuiVideoBaseUrl.value
+      comfyui_video_base_url: comfyuiVideoBaseUrl.value,
+      knowledge_base_url: knowledgeBaseUrl.value,
+      browser_automation_show_window: browserAutomationShowWindow.value,
     })
     successMsg.value = '设置已保存，下次请求将使用新配置'
     setTimeout(() => {
@@ -484,7 +380,7 @@ async function handleSave() {
 }
 
 const providerOptions: Array<{
-  value: ModelProvider
+  value: VisibleModelProvider
   label: string
   desc: string
   icon: string
@@ -496,16 +392,7 @@ const providerOptions: Array<{
     icon: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-    </svg>`
-  },
-  {
-    value: 'ollama',
-    label: '本地 Ollama',
-    desc: '本机运行的 Ollama',
-    icon: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.8"/>
-      <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-    </svg>`
+    </svg>`,
   },
   {
     value: 'bailian',
@@ -513,8 +400,8 @@ const providerOptions: Array<{
     desc: '阿里云等在线服务',
     icon: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`
-  }
+    </svg>`,
+  },
 ]
 </script>
 
@@ -533,9 +420,9 @@ const providerOptions: Array<{
 
 .settings-dialog {
   width: 100%;
-  max-width: 520px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 980px;
+  max-height: 86vh;
+  overflow: hidden;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -608,7 +495,9 @@ const providerOptions: Array<{
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .close-btn:hover {
@@ -619,6 +508,45 @@ const providerOptions: Array<{
 .close-btn svg {
   width: 16px;
   height: 16px;
+}
+
+.dialog-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.settings-sidebar {
+  min-width: 0;
+  border-right: 1px solid #e2e8f0;
+  background: #fbfdff;
+}
+
+.settings-sidebar .section {
+  border-bottom: none;
+  padding: 20px 18px;
+}
+
+.settings-content {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  overflow-y: auto;
+}
+
+.settings-content .section {
+  min-width: 0;
+}
+
+.comfyui-section {
+  grid-column: 1 / -1;
+}
+
+.automation-section {
+  grid-column: 1 / -1;
 }
 
 /* ---- Section ---- */
@@ -644,22 +572,21 @@ const providerOptions: Array<{
 /* ---- 提供商选项卡 ---- */
 .provider-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .provider-tab {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
   background: #f8f9ff;
   color: #434655;
   cursor: pointer;
-  padding: 14px 10px 12px;
-  text-align: center;
+  padding: 13px 12px;
+  text-align: left;
   transition:
     border-color 0.15s,
     background 0.15s,
@@ -681,15 +608,23 @@ const providerOptions: Array<{
 }
 
 .provider-tab-icon {
-  width: 24px;
-  height: 24px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
 }
 
 .provider-tab-icon :deep(svg) {
-  width: 22px;
-  height: 22px;
+  width: 23px;
+  height: 23px;
+}
+
+.provider-tab-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .provider-tab-label {
@@ -732,16 +667,20 @@ const providerOptions: Array<{
   background: #2563eb;
 }
 
-.dot-ollama {
-  background: #007e37;
-}
-
 .dot-cloud {
   background: #fd761a;
 }
 
 .dot-comfyui {
   background: #2563eb;
+}
+
+.dot-knowledge {
+  background: #0f766e;
+}
+
+.dot-automation {
+  background: #7c3aed;
 }
 
 .field-row.two-col {
@@ -777,7 +716,9 @@ const providerOptions: Array<{
   font-size: 14px;
   padding: 0 12px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   width: 100%;
   box-sizing: border-box;
 }
@@ -801,6 +742,84 @@ const providerOptions: Array<{
   border-radius: 3px;
   padding: 1px 4px;
   color: #475569;
+}
+
+.switch-row {
+  position: relative;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8f9ff;
+  padding: 12px 14px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.switch-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.switch-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0b1c30;
+  line-height: 18px;
+}
+
+.switch-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 16px;
+}
+
+.switch-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch-control {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
+}
+
+.switch-control::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.24);
+  transition: transform 0.15s;
+}
+
+.switch-input:checked + .switch-control {
+  background: #2563eb;
+}
+
+.switch-input:checked + .switch-control::after {
+  transform: translateX(18px);
+}
+
+.switch-input:focus-visible + .switch-control {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .url-preview {
@@ -900,8 +919,7 @@ const providerOptions: Array<{
   gap: 10px;
   padding: 16px 24px 20px;
   border-top: 1px solid #e2e8f0;
-  position: sticky;
-  bottom: 0;
+  position: static;
   background: #ffffff;
   border-radius: 0 0 16px 16px;
 }
@@ -918,7 +936,9 @@ const providerOptions: Array<{
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
 }
 
 .btn-secondary {
@@ -959,6 +979,54 @@ const providerOptions: Array<{
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-overlay {
+    padding: 12px;
+  }
+
+  .settings-dialog {
+    max-width: 100%;
+    max-height: 92vh;
+  }
+
+  .dialog-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .settings-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .settings-content {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .comfyui-section {
+    grid-column: auto;
+  }
+
+  .automation-section {
+    grid-column: auto;
+  }
+
+  .provider-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .provider-tab {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .field-row.two-col {
+    grid-template-columns: minmax(0, 1fr) 104px;
   }
 }
 </style>

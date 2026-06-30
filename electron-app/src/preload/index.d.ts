@@ -55,6 +55,7 @@ type XiaohongshuPublishImageTextPayload = {
   content: string
   tags: string[]
   imageUrls: string[]
+  browserAutomationShowWindow: boolean
 }
 
 type XiaohongshuPublishResult = {

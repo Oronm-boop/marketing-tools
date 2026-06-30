@@ -13,6 +13,8 @@ export interface ModelSettingsRead {
   qwen_model: string
   comfyui_base_url: string
   comfyui_video_base_url: string
+  knowledge_base_url: string
+  browser_automation_show_window: boolean
 }
 
 export interface ModelSettingsWrite {
@@ -26,6 +28,8 @@ export interface ModelSettingsWrite {
   qwen_model?: string
   comfyui_base_url?: string
   comfyui_video_base_url?: string
+  knowledge_base_url?: string
+  browser_automation_show_window?: boolean
 }
 
 export function fetchModelSettings(): Promise<ModelSettingsRead> {

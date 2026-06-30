@@ -34,6 +34,7 @@ const api = {
       content: string
       tags: string[]
       imageUrls: string[]
+      browserAutomationShowWindow: boolean
     }) => ipcRenderer.invoke('xhs-publisher:publish-image-text', payload)
   }
 

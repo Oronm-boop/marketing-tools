@@ -226,6 +226,7 @@ def test_copywriting_prompt_uses_frontend_copy_length():
     )
 
     assert "用户在前端选择的文案长度：长" in prompt
+    assert "短=100-300字，中=300-500字，长=500-800字" in prompt
     assert "平台风格要求" in prompt
     assert "平台风格和长度要求" not in prompt
     assert "2000-3000" not in prompt

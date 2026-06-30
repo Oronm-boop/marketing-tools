@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     model_provider: str = "local"
 
     # 局域网AI一体机（model_provider=local 时生效）
-    local_model_base_url: str = "http://192.168.0.105:8081/v1"
+    local_model_base_url: str = "http://127.0.0.1:8081/v1"
     local_model_name: str = "Qwen3.6-35B-A3B-UD-Q8_K_XL"
     local_model_max_tokens: int = 2048
     local_model_top_p: float = 0.9
@@ -59,15 +59,18 @@ class Settings(BaseSettings):
     tavily_timeout_seconds: float = Field(default=30, gt=0)
 
     # ComfyUI 生图 / 生视频服务
-    comfyui_base_url: str = "http://192.168.0.122:8188"
-    comfyui_video_base_url: str = "http://192.168.0.122:8188"
+    comfyui_base_url: str = "http://127.0.0.1:8188"
+    comfyui_video_base_url: str = "http://127.0.0.1:8188"
     comfyui_timeout_seconds: float = Field(default=600, gt=0)
     generated_image_cache_dir: Path = Field(default_factory=default_generated_image_cache_dir)
     generated_image_cache_max_age_seconds: int = Field(default=31536000, gt=0)
 
-    # 知识库接口服务（独立 FastAPI 服务，端口沿用现有 20090）
-    knowledge_base_url: str = "http://192.168.0.250:20090"
+    # 知识库接口服务（独立 FastAPI 服务，默认本机 20090 端口）
+    knowledge_base_url: str = "http://127.0.0.1:20090"
     knowledge_base_timeout_seconds: float = Field(default=300, gt=0)
+
+    # 浏览器自动化后台操作窗口
+    browser_automation_show_window: bool = False
 
     request_timeout_seconds: float = 300
     cors_allow_origins: str = (

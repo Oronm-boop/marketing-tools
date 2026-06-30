@@ -14,6 +14,7 @@ type PublishImageTextPayload = {
   content: string
   tags: string[]
   imageUrls: string[]
+  browserAutomationShowWindow: boolean
 }
 
 type PublishResult = {
@@ -62,8 +63,8 @@ const ELEMENT_WAIT_TIMEOUT_MS = 15_000
 const PUBLISH_CONFIRM_TIMEOUT_MS = 30_000
 const POLL_INTERVAL_MS = 500
 
-/** 仅开发环境显示 RPA 浏览器窗口和 DevTools，方便调试 DOM 选择器 */
-const RPA_DEBUG = !app.isPackaged && process.env['XHS_RPA_DEBUG'] !== '0'
+/** 开发调试 DOM 选择器时可额外打开 DevTools；窗口是否显示由用户设置决定。 */
+const RPA_DEVTOOLS = !app.isPackaged && process.env['XHS_RPA_DEBUG'] === '1'
 
 /** 日志文件路径 — 写入到项目根目录的 xiaohongshu-publish-debug.log */
 const LOG_FILE_PATH = (() => {
@@ -91,7 +92,8 @@ async function publishImageText(payload: PublishImageTextPayload): Promise<Publi
   validatePayload(payload)
 
   const partition = await resolveAccountPartition(payload.accountId)
-  const win = createRpaWindow(partition)
+  const showAutomationWindow = payload.browserAutomationShowWindow === true
+  const win = createRpaWindow(partition, showAutomationWindow)
 
   try {
     return await runPublishSteps(win, payload)
@@ -100,8 +102,7 @@ async function publishImageText(payload: PublishImageTextPayload): Promise<Publi
     log(`发布失败: ${message}`)
     return { status: 'failed', message }
   } finally {
-    // 调试模式下延迟关闭窗口，方便观察
-    if (RPA_DEBUG) {
+    if (showAutomationWindow) {
       await delay(5000)
     }
     if (!win.isDestroyed()) {
@@ -1055,11 +1056,11 @@ async function resolveAccountPartition(accountId: string): Promise<string> {
   return account.partition
 }
 
-function createRpaWindow(partition: string): BrowserWindow {
+function createRpaWindow(partition: string, showWindow: boolean): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 900,
-    show: RPA_DEBUG,
+    show: showWindow,
     title: '[RPA] 小红书发布',
     webPreferences: {
       partition,
@@ -1071,7 +1072,7 @@ function createRpaWindow(partition: string): BrowserWindow {
 
   win.webContents.setUserAgent(XHS_USER_AGENT)
 
-  if (RPA_DEBUG) {
+  if (showWindow && RPA_DEVTOOLS) {
     win.webContents.openDevTools({ mode: 'detach' })
   }
 

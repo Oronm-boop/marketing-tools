@@ -8,6 +8,7 @@ import { is } from '@electron-toolkit/utils'
 const BACKEND_HOST = process.env['MDT_BACKEND_HOST'] || '127.0.0.1'
 const BACKEND_PORT = Number(process.env['MDT_BACKEND_PORT'] || 8088)
 const BACKEND_HEALTH_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}/health`
+const BACKEND_SERVICE_ID = 'mdt-ai-backend'
 
 let backendProcess: ChildProcess | null = null
 
@@ -15,6 +16,14 @@ type BackendCommand = {
   command: string
   args: string[]
   cwd: string
+}
+
+type BackendHealthResponse = {
+  status?: unknown
+  service?: unknown
+  features?: {
+    browser_automation_show_window?: unknown
+  }
 }
 
 export async function startBackend(): Promise<void> {
@@ -52,7 +61,7 @@ export async function startBackend(): Promise<void> {
   if (!(await waitForBackend(15_000))) {
     dialog.showErrorBox(
       '后端服务启动失败',
-      `无法连接本地后端：${BACKEND_HEALTH_URL}\n请检查后端配置或端口占用。`
+      `无法连接可用的本地后端：${BACKEND_HEALTH_URL}\n请检查后端配置、版本或端口占用。`
     )
   }
 }
@@ -152,8 +161,20 @@ async function waitForBackend(timeoutMs: number): Promise<boolean> {
 function checkBackendHealth(): Promise<boolean> {
   return new Promise((resolveResult) => {
     const request = get(BACKEND_HEALTH_URL, (response) => {
-      response.resume()
-      resolveResult(response.statusCode === 200)
+      if (response.statusCode !== 200) {
+        response.resume()
+        resolveResult(false)
+        return
+      }
+
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => {
+        body += chunk
+      })
+      response.on('end', () => {
+        resolveResult(isExpectedBackendHealth(body))
+      })
     })
 
     request.setTimeout(800, () => {
@@ -165,6 +186,19 @@ function checkBackendHealth(): Promise<boolean> {
       resolveResult(false)
     })
   })
+}
+
+function isExpectedBackendHealth(body: string): boolean {
+  try {
+    const health = JSON.parse(body) as BackendHealthResponse
+    return (
+      health.status === 'ok' &&
+      health.service === BACKEND_SERVICE_ID &&
+      health.features?.browser_automation_show_window === true
+    )
+  } catch {
+    return false
+  }
 }
 
 function delay(ms: number): Promise<void> {

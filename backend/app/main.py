@@ -46,7 +46,7 @@ def create_app() -> FastAPI:
     )
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
+    async def health() -> dict[str, object]:
         s = get_settings()
         if s.model_provider == "bailian":
             model = s.qwen_model
@@ -54,7 +54,13 @@ def create_app() -> FastAPI:
             model = s.ollama_model
         else:
             model = s.local_model_name
-        return {"status": "ok", "model": model, "provider": s.model_provider}
+        return {
+            "status": "ok",
+            "service": "mdt-ai-backend",
+            "model": model,
+            "provider": s.model_provider,
+            "features": {"browser_automation_show_window": True},
+        }
 
     @app.get("/api/model-settings", response_model=ModelSettingsRead)
     async def get_model_settings() -> ModelSettingsRead:

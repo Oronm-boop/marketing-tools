@@ -1,5 +1,11 @@
-from app.prompts import build_copywriting_user_prompt, build_seo_user_prompt
-from app.schemas import CopywritingRequest, SeoKeywordRequest
+from app.prompts import (
+    PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX,
+    build_copywriting_user_prompt,
+    build_publish_image_prompts_user_prompt,
+    build_seo_user_prompt,
+)
+from app.schemas import CopywritingRequest, PublishImagePromptRequest, SeoKeywordRequest
+from app.services import _ensure_publish_image_infographic_prefix
 from app.web_search import WebSearchResult, build_copywriting_search_query, format_web_context
 
 
@@ -247,3 +253,25 @@ def test_copywriting_request_accepts_copy_length_alias():
     )
 
     assert payload.copy_length == "短"
+
+
+def test_publish_image_prompt_requires_infographic_instead_of_product_rendering():
+    prompt = build_publish_image_prompts_user_prompt(
+        PublishImagePromptRequest(
+            title="AI营销工具避坑",
+            content="别再只看功能列表了，真正影响投放效果的是数据闭环和团队执行。",
+            tags=["#AI营销", "#增长工具"],
+        )
+    )
+
+    assert "小红书图文图 / 信息图" in prompt
+    assert "不要随意画产品图片" in prompt
+    assert "禁止凭空描绘产品外观、包装、材质、品牌 logo" in prompt
+    assert PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX in prompt
+
+
+def test_publish_image_description_prefix_is_enforced():
+    description = _ensure_publish_image_infographic_prefix("大标题居中，左右对比两组功能卡片。")
+
+    assert description.startswith(PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX)
+    assert "大标题居中" in description

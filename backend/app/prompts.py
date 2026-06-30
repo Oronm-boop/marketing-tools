@@ -48,6 +48,13 @@ XIAOHONGSHU_SYMBOL_COPY_RULES = """
 """.strip()
 
 
+PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX = (
+    "小红书图文信息图风格，画面由中文标题排版、简洁图标、色块、数据卡片、"
+    "流程箭头和抽象场景元素组成，产品只用文字标签或通用图标表达，"
+    "不出现具体商品外观、包装、品牌logo或商品实拍。"
+)
+
+
 def build_seo_user_prompt(
     payload: SeoKeywordRequest,
     web_context: str,
@@ -203,7 +210,7 @@ def build_publish_image_prompts_user_prompt(payload: PublishImagePromptRequest) 
     return f"""
 你是一名小红书图文配图策划和文生图提示词工程师。
 
-请根据下面这篇已经生成好的小红书文案，为它规划 3 张配图，并为每张图生成一段可直接给 ComfyUI 使用的中文文生图描述词。
+请根据下面这篇已经生成好的小红书文案，为它规划 3 张“小红书图文图 / 信息图”配图，并为每张图生成一段可直接给 ComfyUI 使用的中文文生图描述词。
 
 文章标题：
 {payload.title}
@@ -220,7 +227,10 @@ def build_publish_image_prompts_user_prompt(payload: PublishImagePromptRequest) 
 - 首张图必须能单独承载整篇内容的核心卖点，确保只生成 1 张图也可以直接发布。
 - 三张图整体风格必须统一。
 - 每段 description 必须是一整段自然语言提示词，适合直接传给 ComfyUI，不要写项目符号，不要写解释。
-- 画面适合 16:9 横版构图，可以包含图标、抽象人物、产品符号、数据卡片、信息分区、场景对比等视觉元素。
+- 画面必须走“图文图 / 信息图卡片”路线，可以包含中文短标题、图标、色块、数据卡片、信息分区、对比栏、流程箭头、抽象场景元素。
+- 不要随意画产品图片：未提供真实产品图片时，禁止凭空描绘产品外观、包装、材质、品牌 logo、型号机身、屏幕界面、商品实拍或人物手持产品。
+- 如果必须表达产品，只能用文字标签、通用图标、抽象符号、功能卡片或场景关键词表达，不能生成具体商品照片或产品渲染图。
+- 每段 description 必须以这句开头：{PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX}
 
 输出严格 JSON 对象，且只包含 items 字段。
 items 必须是长度为 3 的数组，每个对象必须包含：
@@ -234,6 +244,7 @@ items 必须是长度为 3 的数组，每个对象必须包含：
 3. 三段 description 的画面主体、构图和信息重点必须不同，但整体风格统一。
 4. description 只写图像描述词，不要写“第一张图”“配图提示词”等说明性话术。
 5. JSON 字符串内不得出现未转义的英文双引号。
+6. description 中不得出现“产品实拍”“商品摄影”“产品渲染图”“手持产品”“真实产品外观”等要求生成具体产品图片的表达。
 """.strip()
 
 

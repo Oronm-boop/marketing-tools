@@ -149,7 +149,7 @@ async function runPublishSteps(
 
     // ── Step 6.5: 添加话题标签 ────────────────────────────────────────────────
     if (payload.tags.length > 0) {
-      log(`[6.5/7] 添加 ${payload.tags.length} 个话题标签`)
+      log(`[6.5/7] 在正文末尾逐个添加 ${payload.tags.length} 个话题标签`)
       await addTags(win, payload.tags)
       await delay(800)
     }
@@ -167,6 +167,28 @@ async function runPublishSteps(
 
   log('✅ 小红书图文发布成功')
   return { status: 'published' }
+}
+
+function normalizePublishTags(tags: string[]): string[] {
+  const normalizedTags: string[] = []
+  const seen = new Set<string>()
+
+  for (const rawTag of tags || []) {
+    const tagText = String(rawTag || '')
+      .replace(/^[#＃]+/, '')
+      .trim()
+      .replace(/\s+/g, '')
+    if (!tagText) continue
+
+    const tag = `#${tagText}`
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    normalizedTags.push(tag)
+  }
+
+  return normalizedTags
 }
 
 async function preparePublishImageFiles(imageReferences: string[]): Promise<PreparedPublishImages> {
@@ -687,14 +709,24 @@ async function fillContent(win: BrowserWindow, content: string): Promise<void> {
 // ─── Step 6.5: 添加话题标签 ──────────────────────────────────────────────────
 
 async function addTags(win: BrowserWindow, tags: string[]): Promise<void> {
-  for (const rawTag of tags) {
-    // 去掉 # 前缀，提取纯文本
-    const tagText = rawTag.replace(/^[#＃]+/, '').trim()
+  const normalizedTags = normalizePublishTags(tags)
+  if (normalizedTags.length === 0) return
+
+  if (!(await focusContentEditorAtEnd(win))) {
+    throw new Error('未找到正文编辑区，无法添加话题标签')
+  }
+  await ensureTagLineSeparator(win)
+
+  for (const tag of normalizedTags) {
+    const tagText = tag.replace(/^[#＃]+/, '').trim()
     if (!tagText) continue
 
-    log(`添加话题: #${tagText}`)
+    log(`在正文末尾添加话题: #${tagText}`)
+    if (!(await focusContentEditorAtEnd(win))) {
+      throw new Error('未找到正文编辑区，无法添加话题标签')
+    }
 
-    // 方式 1: 尝试点击 # 话题按钮来打开话题输入
+    // 方式 1: 点击小红书的 #话题按钮，让平台自己生成可识别话题标签。
     const hasTopicButton = await win.webContents.executeJavaScript(`
       (() => {
         const buttons = document.querySelectorAll(
@@ -714,54 +746,111 @@ async function addTags(win: BrowserWindow, tags: string[]): Promise<void> {
 
     if (hasTopicButton) {
       await delay(600)
-
-      // 在话题搜索框中输入后必须回车，小红书才会识别为话题标签
       await win.webContents.insertText(tagText)
       await delay(800)
       await pressKey(win, 'Enter')
       log(`已按 Enter 确认话题: #${tagText}`)
-
       await delay(500)
-
-      // 关闭可能还打开的下拉面板
       await pressKey(win, 'Escape')
       await delay(300)
-    } else {
-      // 方式 2: 直接在正文编辑区末尾追加 #话题
-      log('未找到话题按钮，在正文末尾追加话题标签')
-
-      await win.webContents.executeJavaScript(`
-        (() => {
-          // 重新 focus 到正文编辑区
-          const editor = document.querySelector(
-            '#post-content, [contenteditable="true"], .ql-editor, textarea'
-          );
-          if (editor) {
-            editor.focus();
-            if (editor.isContentEditable) {
-              const range = document.createRange();
-              const sel = window.getSelection();
-              range.selectNodeContents(editor);
-              range.collapse(false); // 光标移到末尾
-              sel.removeAllRanges();
-              sel.addRange(range);
-            } else if (editor.tagName === 'TEXTAREA') {
-              editor.selectionStart = editor.value.length;
-              editor.selectionEnd = editor.value.length;
-            }
-          }
-        })()
-      `)
-      await delay(200)
-
-      // 输入话题文本后同样回车确认
-      await win.webContents.insertText(` #${tagText}`)
-      await delay(300)
-      await pressKey(win, 'Enter')
-      log(`已按 Enter 确认话题: #${tagText}`)
-      await delay(300)
+      continue
     }
+
+    throw new Error('未找到小红书话题按钮，无法添加可识别的话题标签')
   }
+}
+
+async function focusContentEditorAtEnd(win: BrowserWindow): Promise<boolean> {
+  const focused = (await win.webContents.executeJavaScript(`
+    (() => {
+      const selectors = [
+        '#post-content',
+        '[contenteditable="true"]',
+        '[class*="ql-editor"]',
+        '.ql-editor',
+        '[class*="editor"] [contenteditable]',
+        '[class*="Editor"] [contenteditable]',
+        '[class*="post-content"]',
+        '[class*="postContent"]',
+        '[data-placeholder*="正文"]',
+        '[data-placeholder*="描述"]',
+        '[data-placeholder*="输入"]',
+        'textarea[placeholder*="正文"]',
+        'textarea[placeholder*="描述"]',
+        'textarea[placeholder*="输入"]'
+      ];
+
+      const placeCaretAtEnd = (editor) => {
+        editor.focus();
+        editor.click();
+        if (editor.isContentEditable) {
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          return true;
+        }
+        if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
+          const length = editor.value.length;
+          editor.selectionStart = length;
+          editor.selectionEnd = length;
+          return true;
+        }
+        return false;
+      };
+
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.isContentEditable || active.tagName === 'TEXTAREA')
+      ) {
+        const activePlaceholder = active.getAttribute('placeholder') || '';
+        const activeClassName = active.className?.toString() || '';
+        if (
+          active.id === 'post-content' ||
+          active.isContentEditable ||
+          activePlaceholder.includes('正文') ||
+          activePlaceholder.includes('描述') ||
+          activeClassName.includes('ql-editor') ||
+          activeClassName.toLowerCase().includes('editor')
+        ) {
+          return placeCaretAtEnd(active);
+        }
+      }
+
+      for (const selector of selectors) {
+        const editor = document.querySelector(selector);
+        if (editor && placeCaretAtEnd(editor)) return true;
+      }
+
+      return false;
+    })()
+  `)) as boolean
+
+  if (!focused) {
+    log('未找到正文编辑区，无法将话题标签光标移动到末尾')
+  }
+  return focused
+}
+
+async function ensureTagLineSeparator(win: BrowserWindow): Promise<void> {
+  const needsSeparator = (await win.webContents.executeJavaScript(`
+    (() => {
+      const editor = document.activeElement;
+      if (!editor) return false;
+      const text = editor.isContentEditable
+        ? (editor.innerText || editor.textContent || '')
+        : (editor.value || '');
+      return text.trim().length > 0 && !/[\\n\\r]\\s*$/.test(text);
+    })()
+  `)) as boolean
+
+  if (!needsSeparator) return
+
+  await win.webContents.insertText('\n\n')
+  await delay(100)
 }
 
 // ─── Step 7: 点击发布按钮 ────────────────────────────────────────────────────

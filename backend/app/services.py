@@ -7,6 +7,7 @@ from .json_utils import JSONExtractionError, extract_json_payload
 from .knowledge_base import KnowledgeBaseClient, KnowledgeBaseServiceError
 from .local_model_client import LocalModelClient, LocalModelClientError, build_chat_messages
 from .prompts import (
+    PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX,
     SYSTEM_PROMPT,
     build_copywriting_user_prompt,
     build_publish_image_prompts_user_prompt,
@@ -137,6 +138,9 @@ class GenerationService:
         if len(items) < 3:
             raise GenerationServiceError(f"发布配图描述词数量不足：期望 3 条，实际 {len(items)} 条")
 
+        for item in items:
+            item.description = _ensure_publish_image_infographic_prefix(item.description)
+
         return PublishImagePromptResponse(items=items[:3], model=self.model_name)
 
     async def _search_web_context(self, query: str) -> str:
@@ -261,3 +265,10 @@ def _append_missing_keyword_occurrences(content: str, keyword: str, missing_coun
 
     suffix = "\n".join(additions[:missing_count])
     return f"{content.rstrip()}\n\n{suffix}"
+
+
+def _ensure_publish_image_infographic_prefix(description: str) -> str:
+    text = description.strip()
+    if text.startswith(PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX):
+        return text
+    return f"{PUBLISH_IMAGE_INFOGRAPHIC_DESCRIPTION_PREFIX}{text}"
